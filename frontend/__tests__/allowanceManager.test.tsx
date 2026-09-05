@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AllowanceManager } from "@/components/AllowanceManager";
-import { AllowanceList } from "@/components/AllowanceList";
+import { AllowancesPanel } from "@/components/ui/AllowancesPanel";
 
 // Mock the hooks
 jest.mock("@/app/hooks/useWallet");
@@ -148,185 +148,146 @@ describe("AllowanceManager", () => {
   });
 });
 
-describe("AllowanceList", () => {
+describe("AllowancesPanel", () => {
+  // Coverage moved here when AllowanceList, AllowancesList and the second
+  // allowances route were consolidated into this one component.
+  const columns = { spender: "Spender", amount: "Amount", status: "Status" };
   const mockAllowances = [
     {
-      id: "1",
-      tokenContractId: "C3PFD7ZUMXGJK7MRMZBNLIMZRG3ASFXFVEVT5WYQXHB47MHRDPFVVFN",
       spenderAddress: "GCPFGJGZOXPF5EZBQ7TGVGVW4ZBDAJT3RDSAICABJ7GCM3QQHLJNZ7PZ",
-      amount: "1000.00",
+      amount: "10000000000",
+      amountFormatted: "1000.00",
       expirationLedger: 1000000,
       isExpired: false,
     },
     {
-      id: "2",
-      tokenContractId: "C3PFD7ZUMXGJK7MRMZBNLIMZRG3ASFXFVEVT5WYQXHB47MHRDPFVVFN",
       spenderAddress: "GBJPHEJM3VE6D37MYVOKXCPY2TGFBQ6XTWZFSXFVEVT3ZCZZP2CAAAJX",
-      amount: "500.00",
+      amount: "5000000000",
+      amountFormatted: "500.00",
       expirationLedger: 500000,
       isExpired: true,
     },
   ];
 
-  it("renders empty state when no allowances", () => {
-    render(<AllowanceList allowances={[]} />);
+  const renderPanel = (props: Partial<React.ComponentProps<typeof AllowancesPanel>> = {}) =>
+    render(
+      <AllowancesPanel
+        allowances={mockAllowances}
+        columns={columns}
+        emptyTitle="No allowances on this token"
+        emptyDescription="Approve an account to see it here."
+        {...props}
+      />,
+    );
 
-    expect(screen.getByText("No active allowances")).toBeInTheDocument();
+  it("renders the empty state when there are no allowances", () => {
+    renderPanel({ allowances: [] });
+    expect(screen.getByText("No allowances on this token")).toBeInTheDocument();
   });
 
-  it("renders loading state", () => {
-    render(<AllowanceList isLoading={true} />);
-
-    expect(screen.getByText("Loading allowances...")).toBeInTheDocument();
+  it("renders the loading state", () => {
+    renderPanel({ loading: true });
+    expect(screen.getByText("Loading allowances…")).toBeInTheDocument();
   });
 
-  it("renders all allowances", () => {
-    render(<AllowanceList allowances={mockAllowances} />);
+  it("surfaces a load failure with a way to retry", async () => {
+    const onRetry = jest.fn();
+    renderPanel({ error: "RPC unreachable", onRetry });
+    expect(screen.getByText("RPC unreachable")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Try again"));
+    expect(onRetry).toHaveBeenCalled();
+  });
 
+  it("renders every allowance with its amount and status", () => {
+    renderPanel();
     expect(screen.getByText("1000.00")).toBeInTheDocument();
     expect(screen.getByText("500.00")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getByText("Expired")).toBeInTheDocument();
   });
 
-  it("displays correct status for active allowances", () => {
-    render(<AllowanceList allowances={[mockAllowances[0]]} />);
-
-    expect(screen.getByText("Active")).toBeInTheDocument();
+  it("shows the expiration ledger", () => {
+    renderPanel({ allowances: [mockAllowances[0]] });
+    expect(screen.getByText("Ledger 1,000,000")).toBeInTheDocument();
   });
 
-  it("displays correct status for expired allowances", () => {
-    render(<AllowanceList allowances={[mockAllowances[1]]} />);
+  it("offers revoke on live allowances only", () => {
+    const onRevoke = jest.fn();
+    renderPanel({ allowances: [mockAllowances[0]], onRevoke });
+    expect(screen.getByText("Revoke")).toBeInTheDocument();
 
-    const expiredStatus = screen.getByText("Expired");
-    expect(expiredStatus).toBeInTheDocument();
-    expect(expiredStatus).toHaveClass("text-red-400");
+    renderPanel({ allowances: [mockAllowances[1]], onRevoke });
+    // An expired allowance has nothing left to revoke.
+    expect(screen.getAllByText("Revoke")).toHaveLength(1);
   });
 
-  it("copies spender address to clipboard", async () => {
-    const user = userEvent.setup();
+  it("copies a spender address", async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
+    Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
-      configurable: true
+      configurable: true,
     });
-
-    render(<AllowanceList allowances={[mockAllowances[0]]} />);
-
-    const copyButton = screen.getAllByTitle("Copy address")[0];
-    await user.click(copyButton);
-
+    renderPanel({ allowances: [mockAllowances[0]] });
+    await userEvent.click(screen.getByLabelText("Copy spender address"));
     expect(writeText).toHaveBeenCalledWith(mockAllowances[0].spenderAddress);
-  });
-
-  it("displays correct expiration ledger", () => {
-    render(<AllowanceList allowances={[mockAllowances[0]]} />);
-
-    expect(screen.getByText("1,000,000")).toBeInTheDocument();
-  });
-
-  it("shows revoke button for active allowances", () => {
-    const onRevoke = jest.fn();
-    render(<AllowanceList allowances={[mockAllowances[0]]} onRevoke={onRevoke} />);
-
-    const revokeButtons = screen.queryAllByText("Revoke");
-    expect(revokeButtons.length).toBeGreaterThan(0);
-  });
-
-  it("disables revoke button for expired allowances", () => {
-    const onRevoke = jest.fn();
-    render(<AllowanceList allowances={[mockAllowances[1]]} onRevoke={onRevoke} />);
-
-    const expiredButton = screen.getByRole("button", { name: /Expired/i });
-    expect(expiredButton).toBeDisabled();
-  });
-
-  it("calls onRevoke callback when revoke button clicked", async () => {
-    const onRevoke = jest.fn().mockResolvedValue(undefined);
-    render(<AllowanceList allowances={[mockAllowances[0]]} onRevoke={onRevoke} />);
-
-    const user = userEvent.setup();
-    const revokeButton = screen.getByRole("button", { name: /Revoke/i });
-    await user.click(revokeButton);
-
-    expect(onRevoke).toHaveBeenCalledWith("1");
-  });
-
-  it("shows loading state while revoking", async () => {
-    let resolveRevoke: () => void;
-    const revokePromise = new Promise<void>((resolve) => {
-      resolveRevoke = resolve;
-    });
-
-    const onRevoke = jest.fn(() => revokePromise);
-    render(<AllowanceList allowances={[mockAllowances[0]]} onRevoke={onRevoke} />);
-
-    const user = userEvent.setup();
-    const revokeButton = screen.getByRole("button", { name: /Revoke/i });
-    await user.click(revokeButton);
-
-    await waitFor(() => {
-      expect(screen.getByText("Revoking...")).toBeInTheDocument();
-    });
-
-    resolveRevoke!();
-
-    await waitFor(() => {
-      expect(screen.queryByText("Revoking...")).not.toBeInTheDocument();
-    });
-  });
-
-  it("hides revoke button when no onRevoke callback", () => {
-    render(<AllowanceList allowances={[mockAllowances[0]]} />);
-
-    // Should still display spender and amount, just no revoke button
-    expect(screen.getByText("1000.00")).toBeInTheDocument();
   });
 });
 
-describe("AllowanceList - Multiple allowances", () => {
+describe("AllowancesPanel — multiple allowances", () => {
+  const columns = { spender: "Spender", amount: "Amount", status: "Status" };
   const mockAllowances = [
     {
-      id: "1",
-      tokenContractId: "C3PFD7ZUMXGJK7MRMZBNLIMZRG3ASFXFVEVT5WYQXHB47MHRDPFVVFN",
       spenderAddress: "GCPFGJGZOXPF5EZBQ7TGVGVW4ZBDAJT3RDSAICABJ7GCM3QQHLJNZ7PZ",
-      amount: "1000.00",
+      amount: "10000000000",
+      amountFormatted: "1000.00",
       expirationLedger: 1000000,
       isExpired: false,
     },
     {
-      id: "2",
-      tokenContractId: "C3PFD7ZUMXGJK7MRMZBNLIMZRG3ASFXFVEVT5WYQXHB47MHRDPFVVFN",
       spenderAddress: "GBJPHEJM3VE6D37MYVOKXCPY2TGFBQ6XTWZFSXFVEVT3ZCZZP2CAAAJX",
-      amount: "500.00",
+      amount: "5000000000",
+      amountFormatted: "500.00",
       expirationLedger: 500000,
       isExpired: false,
     },
     {
-      id: "3",
-      tokenContractId: "C3PFD7ZUMXGJK7MRMZBNLIMZRG3ASFXFVEVT5WYQXHB47MHRDPFVVFN",
-      spenderAddress: "GCPFGJGZOXPF5EZBQ7TGVGVW4ZBDAJT3RDSAICABJ7GCM3QQHLJNZ7PZ",
-      amount: "100.00",
+      spenderAddress: "GA6HCMBLTZS5VYYBCATRBRZ3BZJMAFUDKB4YC5MZ3RECC5FQNPQFXBVK",
+      amount: "1000000000",
+      amountFormatted: "100.00",
       expirationLedger: 200000,
       isExpired: false,
     },
   ];
 
-  it("renders all allowances in correct order", () => {
-    render(<AllowanceList allowances={mockAllowances} />);
-
-    const amounts = screen.getAllByText(/\d+\.\d{2}/);
-    expect(amounts.length).toBeGreaterThanOrEqual(3);
+  it("renders every allowance", () => {
+    render(
+      <AllowancesPanel
+        allowances={mockAllowances}
+        columns={columns}
+        emptyTitle="none"
+        emptyDescription="none"
+      />,
+    );
+    expect(screen.getAllByText(/^\d+\.\d{2}$/)).toHaveLength(3);
   });
 
-  it("handles revoke on specific allowance", async () => {
-    const onRevoke = jest.fn().mockResolvedValue(undefined);
-    render(<AllowanceList allowances={mockAllowances} onRevoke={onRevoke} />);
+  it("revokes the allowance whose row was clicked", async () => {
+    const onRevoke = jest.fn();
+    render(
+      <AllowancesPanel
+        allowances={mockAllowances}
+        columns={columns}
+        emptyTitle="none"
+        emptyDescription="none"
+        onRevoke={onRevoke}
+      />,
+    );
 
     const user = userEvent.setup();
-    const revokeButtons = screen.getAllByRole("button", { name: /Revoke/i });
-    await user.click(revokeButtons[0]);
+    await user.click(screen.getAllByRole("button", { name: /^Revoke allowance for/i })[0]);
 
-    expect(onRevoke).toHaveBeenCalledWith("1");
+    // The spender address identifies the allowance on chain; a list index
+    // would break the moment the list is filtered or reordered.
+    expect(onRevoke).toHaveBeenCalledWith(mockAllowances[0].spenderAddress);
   });
 });

@@ -181,8 +181,8 @@ export default function TransactionHistory({
     if (loading && history.length === 0) {
         return (
             <div className="flex h-32 flex-col items-center justify-center gap-2">
-                <Loader2 className="h-6 w-6 animate-spin text-stellar-400" />
-                <p className="text-sm text-gray-400">Loading history...</p>
+                <Loader2 className="h-6 w-6 animate-spin text-info" />
+                <p className="text-sm text-muted">Loading history...</p>
             </div>
         );
     }
@@ -191,26 +191,26 @@ export default function TransactionHistory({
         <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="glass-card p-4">
-                    <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                <div className="panel p-4">
+                    <span className="text-xs font-medium text-muted">
                         Total Minted to Date
                     </span>
-                    <p className="mt-1 text-xl font-bold text-white">
-                        {stats.totalMinted} <span className="text-stellar-400 text-sm font-normal">{symbol}</span>
+                    <p className="mt-1 text-xl font-bold text-ink">
+                        {stats.totalMinted} <span className="text-info text-sm font-normal">{symbol}</span>
                     </p>
                 </div>
-                <div className="glass-card p-4">
-                    <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                <div className="panel p-4">
+                    <span className="text-xs font-medium text-muted">
                         Total Recipients
                     </span>
-                    <p className="mt-1 text-xl font-bold text-white">
+                    <p className="mt-1 text-xl font-bold text-ink">
                         {stats.totalRecipients}
                     </p>
                 </div>
             </div>
 
             <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white">Transaction History</h3>
+                <h3 className="text-lg font-semibold text-ink">Transaction History</h3>
 
                 <div className="relative">
                     <button
@@ -223,19 +223,19 @@ export default function TransactionHistory({
                     </button>
 
                     {showExportOptions && (
-                        <div className="absolute right-0 top-full z-10 mt-2 w-48 overflow-hidden rounded-lg border border-white/10 bg-void-900 bg-opacity-95 shadow-xl backdrop-blur-md">
+                        <div className="absolute right-0 top-full z-10 mt-2 w-48 overflow-hidden rounded-lg border border-line bg-sunken bg-opacity-95">
                             <button
                                 onClick={exportPDF}
-                                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+                                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-body transition-colors hover:bg-sunken hover:text-ink"
                             >
-                                <FileText className="h-4 w-4 text-red-400" />
+                                <FileText className="h-4 w-4 text-danger" />
                                 Export as PDF
                             </button>
                             <button
                                 onClick={exportCSV}
-                                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+                                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-body transition-colors hover:bg-sunken hover:text-ink"
                             >
-                                <FileText className="h-4 w-4 text-blue-400" />
+                                <FileText className="h-4 w-4 text-info" />
                                 Export as CSV
                             </button>
                         </div>
@@ -244,68 +244,68 @@ export default function TransactionHistory({
             </div>
 
             {error && (
-                <div className="glass-card flex items-center gap-3 p-4 text-sm text-red-400">
+                <div className="panel flex items-center gap-3 p-4 text-sm text-danger">
                     <AlertCircle className="h-4 w-4" />
                     <p>{error}</p>
                 </div>
             )}
 
             {history.length === 0 ? (
-                <div className="glass-card flex flex-col items-center justify-center p-12 text-center text-gray-500">
+                <div className="panel flex flex-col items-center justify-center p-12 text-center text-muted">
                     <p>No transactions found for this token yet.</p>
                     <p className="mt-1 text-xs">Events may take a few moments to appear after a transaction.</p>
                 </div>
             ) : (
-                <div className="glass-card overflow-hidden">
+                <div className="panel overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-white/5 bg-white/2">
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">From / To</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Amount</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Ledger</th>
+                                <tr className="border-b border-line/5 bg-white/2">
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted">Type</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-muted">From / To</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-muted">Amount</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-muted">Ledger</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-line/5">
                                 {history.map((tx) => (
                                     <tr key={tx.id} className="transition-colors hover:bg-white/2">
                                         <td className="px-4 py-4">
-                                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tx.type === "mint" ? "bg-green-500/10 text-green-400" :
-                                                tx.type === "burn" ? "bg-red-500/10 text-red-400" :
-                                                    "bg-blue-500/10 text-blue-400"
+                                            <span className={`rounded-full px-2 py-0.5 text-[0.75rem] font-medium ${tx.type === "mint" ? "bg-ok-soft text-ok" :
+                                                tx.type === "burn" ? "bg-danger-soft text-danger" :
+                                                    "bg-info-soft text-info"
                                                 }`}>
                                                 {tx.type}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-4 font-mono text-xs">
+                                        <td className="px-4 py-4 data text-xs">
                                             {tx.type === "mint" ? (
                                                 <div className="flex flex-col">
-                                                    <span className="text-gray-500">To:</span>
-                                                    <span className="text-stellar-300">{truncateAddress(tx.to!, 6)}</span>
+                                                    <span className="text-muted">To:</span>
+                                                    <span className="text-info">{truncateAddress(tx.to!, 6)}</span>
                                                 </div>
                                             ) : tx.type === "burn" ? (
                                                 <div className="flex flex-col">
-                                                    <span className="text-gray-500">From:</span>
-                                                    <span className="text-stellar-300">{truncateAddress(tx.from!, 6)}</span>
+                                                    <span className="text-muted">From:</span>
+                                                    <span className="text-info">{truncateAddress(tx.from!, 6)}</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-1">
-                                                        <span className="w-8 text-gray-500">From:</span>
-                                                        <span className="text-stellar-300">{truncateAddress(tx.from!, 6)}</span>
+                                                        <span className="w-8 text-muted">From:</span>
+                                                        <span className="text-info">{truncateAddress(tx.from!, 6)}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1">
-                                                        <span className="w-8 text-gray-500">To:</span>
-                                                        <span className="text-stellar-300">{truncateAddress(tx.to!, 6)}</span>
+                                                        <span className="w-8 text-muted">To:</span>
+                                                        <span className="text-info">{truncateAddress(tx.to!, 6)}</span>
                                                     </div>
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-4 text-right font-mono text-white">
+                                        <td className="px-4 py-4 text-right data text-ink">
                                             {formatTokenAmount(tx.amount, decimals)}
                                         </td>
-                                        <td className="px-4 py-4 text-right text-xs text-gray-400">
+                                        <td className="px-4 py-4 text-right text-xs text-muted">
                                             L{tx.ledger.toLocaleString()}
                                         </td>
                                     </tr>

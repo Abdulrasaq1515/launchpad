@@ -365,19 +365,19 @@ export default function DeployForm() {
 
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="glass-card p-8 min-h-[400px] flex flex-col"
+        className="panel p-8 min-h-[400px] flex flex-col"
       >
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {announcement}
         </p>
         {!publicKey && currentStep < 4 && (
-          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-lg bg-stellar-500/10 border border-stellar-500/20 text-sm">
-            <Wallet className="w-4 h-4 text-stellar-400 shrink-0" />
-            <span className="text-gray-300 flex-1">Connect your wallet before deploying — you can still fill in the form now.</span>
+          <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-lg bg-info-soft border border-info/20 text-sm">
+            <Wallet className="w-4 h-4 text-info shrink-0" />
+            <span className="text-body flex-1">Connect your wallet before deploying — you can still fill in the form now.</span>
             <button
               type="button"
               onClick={connect}
-              className="text-stellar-400 hover:text-stellar-300 font-semibold text-xs whitespace-nowrap underline"
+              className="text-info hover:text-info font-semibold text-xs whitespace-nowrap underline"
             >
               Connect
             </button>
@@ -436,7 +436,7 @@ export default function DeployForm() {
           </div>
         )}
 
-        <div className="mt-10 flex justify-between items-center bg-void-900/50 -mx-8 -mb-8 p-6 rounded-b-2xl border-t border-white/5">
+        <div className="mt-10 flex justify-between items-center bg-sunken/50 -mx-8 -mb-8 p-6 rounded-b-2xl border-t border-line/5">
           <Button
             type="button"
             variant="secondary"
@@ -536,7 +536,7 @@ export default function DeployForm() {
       </form>
 
       <div className="mt-8 text-center">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           {tDeploy("stepIndicator", {
             current: currentStep,
             name: steps[currentStep - 1],

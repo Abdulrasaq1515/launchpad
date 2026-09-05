@@ -21,18 +21,18 @@ const formatIntegerString = (value?: string | number) => {
 };
 
 const SummaryItem = ({ label, value }: { label: string; value: string | number | undefined }) => (
-    <div className="flex justify-between py-2 border-b border-white/5">
-        <span className="text-gray-400 text-sm">{label}</span>
-        <span className="text-white font-medium truncate ml-4 max-w-[200px]">
-            {value || <span className="text-gray-600 italic">Not set</span>}
+    <div className="flex justify-between py-2 border-b border-line/5">
+        <span className="text-muted text-sm">{label}</span>
+        <span className="text-ink font-medium truncate ml-4 max-w-[200px]">
+            {value || <span className="text-faint italic">Not set</span>}
         </span>
     </div>
 );
 
 const FlagItem = ({ label, enabled }: { label: string; enabled: boolean }) => (
-    <div className="flex justify-between py-2 border-b border-white/5">
-        <span className="text-gray-400 text-sm">{label}</span>
-        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${enabled ? "bg-stellar-500/20 text-stellar-300" : "bg-void-700/60 text-gray-500"}`}>
+    <div className="flex justify-between py-2 border-b border-line/5">
+        <span className="text-muted text-sm">{label}</span>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${enabled ? "bg-info-soft text-info" : "bg-sunken/60 text-muted"}`}>
             {enabled ? "Enabled" : "Disabled"}
         </span>
     </div>
@@ -47,18 +47,18 @@ export const StepReview = ({ control, estimatedFee, feeEstimationLoading, feeEst
             : "Existing multisig / DAO contract";
 
     return (
-        <div className="space-y-6 animate-fade-in-up">
+        <div className="space-y-6">
             <div className="text-left">
-                <h2 className="text-xl font-bold text-white mb-2">Review & Deploy</h2>
-                <p className="text-sm text-gray-400">
+                <h2 className="text-xl font-bold text-ink mb-2">Review & Deploy</h2>
+                <p className="text-sm text-muted">
                     Final check before deploying your token to the network.
                 </p>
             </div>
             {/* Friendbot banner: shows when on testnet and balance is low */}
             <FriendbotBanner threshold={100} />
 
-            <div className="glass-card p-6 space-y-1">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-stellar-500 mb-4">Configuration Summary</h3>
+            <div className="panel p-6 space-y-1">
+                <h3 className="text-xs font-bold text-info mb-4">Configuration Summary</h3>
                 <SummaryItem label="Token Name" value={formData.name} />
                 <SummaryItem label="Symbol" value={formData.symbol} />
                 <SummaryItem label="Decimals" value={formData.decimals} />
@@ -83,40 +83,40 @@ export const StepReview = ({ control, estimatedFee, feeEstimationLoading, feeEst
             </div>
 
             {/* Estimated Network Fee */}
-            <div className="glass-card p-4 border-stellar-400/20">
+            <div className="panel p-4 border-info/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-stellar-400/10">
-                    <Zap className="h-5 w-5 text-stellar-400" />
+                  <div className="p-2 rounded-lg bg-info-soft">
+                    <Zap className="h-5 w-5 text-info" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-white">Estimated Network Fee</p>
-                    <p className="text-xs text-gray-400">Pre-flight simulation cost</p>
+                    <p className="text-sm font-medium text-ink">Estimated Network Fee</p>
+                    <p className="text-xs text-muted">Pre-flight simulation cost</p>
                   </div>
                 </div>
                 <div className="text-right">
                   {feeEstimationLoading ? (
                     <div className="flex items-center gap-2">
-                      <div className="animate-spin h-4 w-4 border-2 border-stellar-400 border-t-transparent rounded-full" />
-                      <span className="text-sm text-gray-400">Estimating...</span>
+                      <div className="animate-spin h-4 w-4 border-2 border-info border-t-transparent rounded-full" />
+                      <span className="text-sm text-muted">Estimating...</span>
                     </div>
                   ) : feeEstimationError ? (
-                    <span className="text-sm text-red-400">Failed to estimate</span>
+                    <span className="text-sm text-danger">Failed to estimate</span>
                   ) : estimatedFee ? (
                     <div className="flex items-center gap-1">
-                      <span className="text-xl font-bold text-stellar-400">~{estimatedFee}</span>
-                      <span className="text-sm text-gray-400">XLM</span>
+                      <span className="text-xl font-bold text-info">~{estimatedFee}</span>
+                      <span className="text-sm text-muted">XLM</span>
                     </div>
                   ) : (
-                    <span className="text-sm text-gray-500">Run &quot;Check&quot; to estimate</span>
+                    <span className="text-sm text-muted">Run &quot;Check&quot; to estimate</span>
                   )}
                 </div>
               </div>
             </div>
 
             {(formData.authorizationRequired || formData.authorizationRevocable) && (
-                <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">
-                    <p className="text-xs text-blue-200 leading-relaxed">
+                <div className="bg-info-soft border border-info/20 p-4 rounded-xl">
+                    <p className="text-xs text-info leading-relaxed">
                         <strong>Regulated token:</strong> Authorization Required is enabled.
                         Each address must be authorized before it can receive tokens — use the
                         Holder Authorization card in the token&apos;s Admin Console after deploying.
@@ -126,25 +126,25 @@ export const StepReview = ({ control, estimatedFee, feeEstimationLoading, feeEst
                 </div>
             )}
             
-            <p className="text-[10px] text-gray-500 text-center px-4">
+            <p className="text-[10px] text-muted text-center px-4">
                 By deploying, you will initiate a transaction on the Stellar network. 
                 Resource fees will be calculated during the pre-flight check.
             </p>
 
             {!publicKey && (
-                <div className="p-6 rounded-xl bg-stellar-500/5 border border-stellar-500/20 text-center space-y-4 animate-pulse-subtle">
+                <div className="p-6 rounded-xl bg-info-soft border border-info/20 text-center space-y-4 animate-pulse-subtle">
                     <div className="flex justify-center">
-                        <div className="p-3 rounded-full bg-stellar-500/10">
-                            <Wallet className="w-6 h-6 text-stellar-400" />
+                        <div className="p-3 rounded-full bg-info-soft">
+                            <Wallet className="w-6 h-6 text-info" />
                         </div>
                     </div>
                     <div>
-                        <h4 className="text-white font-bold">Wallet Disconnected</h4>
-                        <p className="text-sm text-gray-400">Connect your wallet to finalize deployment.</p>
+                        <h4 className="text-ink font-bold">Wallet Disconnected</h4>
+                        <p className="text-sm text-muted">Connect your wallet to finalize deployment.</p>
                     </div>
                     <Button 
                         onClick={connect}
-                        className="w-full bg-stellar-500 hover:bg-stellar-600 text-white font-bold py-3 shadow-lg shadow-stellar-500/20"
+                        className="w-full bg-info hover:bg-info text-ink font-bold py-3"
                     >
                         Connect Wallet to Deploy
                     </Button>
@@ -223,10 +223,10 @@ function FriendbotBanner({ threshold = 100 }: { threshold?: number }) {
     };
 
     return (
-        <div className="mb-4 p-4 rounded-lg bg-yellow-900/10 border border-yellow-500/10">
+        <div className="mb-4 p-4 rounded-lg bg-yellow-900/10 border border-warn/10">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <p className="font-semibold text-sm text-yellow-200">Low testnet balance</p>
+                    <p className="font-semibold text-sm text-warn">Low testnet balance</p>
                     <p className="text-xs text-yellow-100">Your connected wallet has {balance === null ? 'an unknown amount of' : `${balance.toFixed(4)} XLM`}. Fund with Friendbot to proceed.</p>
                 </div>
                 <div>

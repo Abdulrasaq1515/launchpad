@@ -9,9 +9,11 @@ export function AccessibilityProvider({
 }) {
   useEffect(() => {
     if (process.env.NODE_ENV === "development") {
-      import("../../lib/accessibility").then(({ initAxe }) => {
-        initAxe();
-      });
+      import("../../lib/accessibility")
+        .then(({ initAxe }) => initAxe())
+        .catch(() => {
+          /* auditing is optional; the app must not depend on it */
+        });
     }
   }, []);
 

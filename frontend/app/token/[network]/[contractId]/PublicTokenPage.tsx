@@ -53,11 +53,11 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="ml-2 inline-flex items-center rounded-md border border-white/10 px-2 py-1 text-xs text-gray-400 transition-colors hover:border-stellar-400/30 hover:text-stellar-300"
+      className="ml-2 inline-flex items-center rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-info/30 hover:text-info"
       aria-label={copied ? "Copied" : "Copy to clipboard"}
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-green-400" />
+        <Check className="h-3.5 w-3.5 text-ok" />
       ) : (
         <Copy className="h-3.5 w-3.5" />
       )}
@@ -115,7 +115,7 @@ function ShareButton({
   return (
     <button
       onClick={handleShare}
-      className="inline-flex items-center gap-2 rounded-md border border-stellar-400/30 bg-stellar-400/10 px-3 py-2 text-sm font-medium text-stellar-300 transition-colors hover:bg-stellar-400/20"
+      className="inline-flex items-center gap-2 rounded-md border border-info/30 bg-info-soft px-3 py-2 text-sm font-medium text-info transition-colors hover:bg-info-soft"
       aria-label={copied ? "Link copied!" : "Share this token"}
     >
       {copied ? (
@@ -135,11 +135,11 @@ function ShareButton({
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="glass-card flex flex-col gap-1 p-4">
-      <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+    <div className="panel flex flex-col gap-1 p-4">
+      <span className="text-xs font-medium text-muted">
         {label}
       </span>
-      <span className="truncate text-lg font-semibold text-white">{value}</span>
+      <span className="truncate text-lg font-semibold text-ink">{value}</span>
     </div>
   );
 }
@@ -148,8 +148,8 @@ function LoadingState() {
   const t = useTranslations("token");
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-      <Loader2 className="h-8 w-8 animate-spin text-stellar-400" />
-      <p className="text-sm text-gray-400">{t("fetchingData")}</p>
+      <Loader2 className="h-8 w-8 animate-spin text-info" />
+      <p className="text-sm text-muted">{t("fetchingData")}</p>
     </div>
   );
 }
@@ -164,8 +164,8 @@ function ErrorState({
   const t = useTranslations("token");
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400" />
-      <p className="max-w-md text-gray-400">{message}</p>
+      <AlertCircle className="h-10 w-10 text-danger" />
+      <p className="max-w-md text-muted">{message}</p>
       <button onClick={onRetry} className="btn-secondary px-4 py-2 text-sm">
         {t("retry")}
       </button>
@@ -217,7 +217,7 @@ function HoldersTable({
 
   if (holders.length === 0) {
     return (
-      <div className="glass-card p-8 text-center text-gray-500">
+      <div className="panel p-8 text-center text-muted">
         <p>{emptyMessage}</p>
         <p className="mt-1 text-xs">
           {t("sorobanNote")}
@@ -227,14 +227,14 @@ function HoldersTable({
   }
 
   const thClass =
-    "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-300 transition-colors";
+    "px-4 py-3 text-left text-xs font-medium text-muted cursor-pointer select-none hover:text-body transition-colors";
 
   return (
-    <div className="glass-card overflow-hidden">
+    <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm" role="table">
           <thead>
-            <tr className="border-b border-white/5">
+            <tr className="border-b border-line/5">
               <th
                 className={thClass}
                 onClick={() => toggleSort("address")}
@@ -289,31 +289,31 @@ function HoldersTable({
             {sorted.map((holder, i) => (
               <tr
                 key={holder.address}
-                className={`border-b border-white/5 transition-colors hover:bg-white/2 ${
+                className={`border-b border-line/5 transition-colors hover:bg-white/2 ${
                   i % 2 === 0 ? "bg-white/1" : ""
                 }`}
               >
-                <td className="px-4 py-3 font-mono text-xs text-stellar-300">
+                <td className="px-4 py-3 data text-xs text-info">
                   <span className="hidden sm:inline">{holder.address}</span>
                   <span className="sm:hidden">
                     {truncateAddress(holder.address, 6)}
                   </span>
                   <CopyButton text={holder.address} />
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-white">
+                <td className="px-4 py-3 text-right data text-ink">
                   {holder.balance}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-void-700 sm:block">
+                    <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-sunken sm:block">
                       <div
-                        className="h-full rounded-full bg-linear-to-r from-stellar-500 to-stellar-400"
+                        className="h-full rounded-full bg-ink"
                         style={{
                           width: `${Math.min(holder.sharePercent, 100)}%`,
                         }}
                       />
                     </div>
-                    <span className="font-mono text-gray-300">
+                    <span className="data text-body">
                       {holder.sharePercent.toFixed(2)}%
                     </span>
                   </div>
@@ -429,17 +429,17 @@ export default function PublicTokenPage({
   if (!tokenInfo) return null;
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 animate-fade-in-up">
+    <div className="mx-auto max-w-5xl px-6 py-10">
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">
+            <h1 className="text-3xl font-bold text-ink">
               {tokenInfo.name}{" "}
-              <span className="text-stellar-400">({tokenInfo.symbol})</span>
+              <span className="text-info">({tokenInfo.symbol})</span>
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
-              <span className="font-mono text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+              <span className="data text-xs">
                 <span className="hidden md:inline">{contractId}</span>
                 <span className="md:hidden">
                   {truncateAddress(contractId, 8)}
@@ -450,7 +450,7 @@ export default function PublicTokenPage({
                 href={`https://stellar.expert/explorer/${networkConfig.network}/contract/${contractId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-stellar-400 hover:text-stellar-300 transition-colors"
+                className="inline-flex items-center gap-1 text-info hover:text-info transition-colors"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Explorer</span>
@@ -473,7 +473,7 @@ export default function PublicTokenPage({
             isLocked={tokenInfo.isLocked}
           />
           {tokenInfo.isLocked && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400">
+            <span className="inline-flex items-center gap-1 rounded-full bg-ok-soft px-2.5 py-0.5 text-xs font-medium text-ok">
               <Lock className="h-3 w-3" />
               {t("immutable")}
             </span>
@@ -482,7 +482,7 @@ export default function PublicTokenPage({
       </section>
 
       <section aria-label="Token details" className="mb-10">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+        <h2 className="mb-4 text-sm font-medium text-muted">
           {t("tokenDetails")}
         </h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -497,7 +497,7 @@ export default function PublicTokenPage({
 
       {/* Top holders */}
       <section aria-label={t("holders")}>
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+        <h2 className="mb-4 text-sm font-medium text-muted">
           {t("holders")}
         </h2>
         <HoldersTable
@@ -511,14 +511,14 @@ export default function PublicTokenPage({
       </section>
 
       {/* Footer */}
-      <section className="mt-10 pt-8 border-t border-white/5">
+      <section className="mt-10 pt-8 border-t border-line/5">
         <div className="text-center">
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-muted mb-4">
             {t("viewInDashboard")}
           </p>
           <a
             href={`/dashboard/${contractId}`}
-            className="inline-flex items-center gap-2 rounded-md border border-stellar-400/30 bg-stellar-400/10 px-4 py-2 text-sm font-medium text-stellar-300 transition-colors hover:bg-stellar-400/20"
+            className="inline-flex items-center gap-2 rounded-md border border-info/30 bg-info-soft px-4 py-2 text-sm font-medium text-info transition-colors hover:bg-info-soft"
           >
             {t("openInDashboard")}
             <ExternalLink className="h-4 w-4" />

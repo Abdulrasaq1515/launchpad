@@ -8,13 +8,13 @@ export default function Footer() {
   return (
     <footer
       role="contentinfo"
-      className="border-t border-white/5 py-8 text-center text-sm text-gray-500"
+      className="border-t border-line/5 py-8 text-center text-sm text-muted"
     >
       <p>
         {t("builtFor")}{" "}
         <a
           href="https://www.drips.network/wave"
-          className="text-stellar-400 hover:underline"
+          className="text-info hover:underline"
           target="_blank"
           rel="noopener noreferrer"
         >

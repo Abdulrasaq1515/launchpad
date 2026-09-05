@@ -1,11 +1,9 @@
-import type { Metadata } from "next";
-import { AllowancesPage } from "./AllowancesPage";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Token Allowances | SoroPad",
-  description: "Manage and review token allowances on Soroban",
-};
-
-export default function AllowancesRoute() {
-  return <AllowancesPage />;
+/**
+ * Allowances used to live at two addresses with two different implementations.
+ * This one keeps working for anyone holding a link or a bookmark.
+ */
+export default function DashboardAllowancesRoute() {
+  redirect("/allowances");
 }

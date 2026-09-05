@@ -15,18 +15,18 @@ export function PreflightError({
 
   return (
     <div
-      className="rounded-xl border border-red-500/30 bg-red-500/10 p-4"
+      className="rounded-xl border border-danger/30 bg-danger-soft p-4"
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
       <div className="flex items-start gap-3">
-        <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0 text-red-400" />
+        <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0 text-danger" />
         <div className="flex-1">
-          <h3 className="font-semibold text-red-300 mb-2">Cannot proceed with transaction</h3>
+          <h3 className="font-semibold text-danger mb-2">Cannot proceed with transaction</h3>
           <ul className="space-y-1">
             {errors.map((error, idx) => (
-              <li key={idx} className="text-sm text-red-200">
+              <li key={idx} className="text-sm text-danger">
                 • {error}
               </li>
             ))}
@@ -35,7 +35,7 @@ export function PreflightError({
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="text-red-400 hover:text-red-300 transition-colors"
+            className="text-danger hover:text-danger transition-colors"
             aria-label="Dismiss"
           >
             ×
@@ -60,18 +60,18 @@ export function PreflightWarning({
 
   return (
     <div
-      className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4"
+      className="rounded-xl border border-warn/30 bg-warn-soft p-4"
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
       <div className="flex items-start gap-3">
-        <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0 text-yellow-400" />
+        <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0 text-warn" />
         <div className="flex-1">
-          <h3 className="font-semibold text-yellow-300 mb-2">Warnings</h3>
+          <h3 className="font-semibold text-warn mb-2">Warnings</h3>
           <ul className="space-y-1">
             {warnings.map((warning, idx) => (
-              <li key={idx} className="text-sm text-yellow-200">
+              <li key={idx} className="text-sm text-warn">
                 • {warning}
               </li>
             ))}
@@ -80,7 +80,7 @@ export function PreflightWarning({
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="text-yellow-400 hover:text-yellow-300 transition-colors"
+            className="text-warn hover:text-warn transition-colors"
             aria-label="Dismiss"
           >
             ×
@@ -103,20 +103,20 @@ export function PreflightSuccess({
 }) {
   return (
     <div
-      className="rounded-xl border border-green-500/30 bg-green-500/10 p-4"
+      className="rounded-xl border border-ok/30 bg-ok-soft p-4"
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
       <div className="flex items-center gap-3">
-        <CheckCircle className="h-5 w-5 flex-shrink-0 text-green-400" />
+        <CheckCircle className="h-5 w-5 flex-shrink-0 text-ok" />
         <div className="flex-1">
-          <p className="text-sm text-green-200">{message}</p>
+          <p className="text-sm text-ok">{message}</p>
         </div>
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="text-green-400 hover:text-green-300 transition-colors"
+            className="text-ok hover:text-ok transition-colors"
             aria-label="Dismiss"
           >
             ×
@@ -137,14 +137,14 @@ export function PreflightLoading({
 }) {
   return (
     <div
-      className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4"
+      className="rounded-xl border border-info/30 bg-info-soft p-4"
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
       <div className="flex items-center gap-3">
-        <Loader2 className="h-5 w-5 animate-spin flex-shrink-0 text-blue-400" />
-        <p className="text-sm text-blue-200">{message}</p>
+        <Loader2 className="h-5 w-5 animate-spin flex-shrink-0 text-info" />
+        <p className="text-sm text-info">{message}</p>
       </div>
     </div>
   );

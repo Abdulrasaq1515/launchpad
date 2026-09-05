@@ -184,24 +184,24 @@ const variantStyles: Record<
   }
 > = {
   info: {
-    border: "border-blue-500/30",
+    border: "border-info/30",
     icon: Info,
-    iconColor: "text-blue-400",
+    iconColor: "text-info",
   },
   success: {
-    border: "border-emerald-500/30",
+    border: "border-ok/30",
     icon: CheckCircle2,
-    iconColor: "text-emerald-400",
+    iconColor: "text-ok",
   },
   warning: {
-    border: "border-yellow-500/30",
+    border: "border-warn/30",
     icon: AlertTriangle,
-    iconColor: "text-yellow-400",
+    iconColor: "text-warn",
   },
   error: {
-    border: "border-red-500/30",
+    border: "border-danger/30",
     icon: XCircle,
-    iconColor: "text-red-400",
+    iconColor: "text-danger",
   },
 };
 
@@ -218,13 +218,13 @@ function ToastItem({
   return (
     <div
       role={toast.variant === "error" ? "alert" : "status"}
-      className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${styles.border} bg-void-900/95 p-4 shadow-2xl backdrop-blur-sm animate-in slide-in-from-right-4 duration-200`}
+      className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${styles.border} bg-sunken/95 p-4 animate-in slide-in-from-right-4 duration-200`}
     >
       <Icon className={`h-5 w-5 shrink-0 ${styles.iconColor}`} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-white">{toast.title}</p>
+        <p className="text-sm font-semibold text-ink">{toast.title}</p>
         {toast.message && (
-          <p className="mt-1 text-xs leading-relaxed text-gray-300 break-words">
+          <p className="mt-1 text-xs leading-relaxed text-body break-words">
             {toast.message}
           </p>
         )}
@@ -233,7 +233,7 @@ function ToastItem({
         type="button"
         onClick={() => onDismiss(toast.id)}
         aria-label="Dismiss notification"
-        className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+        className="rounded-md p-1 text-muted transition-colors hover:bg-sunken hover:text-ink"
       >
         <X className="h-4 w-4" />
       </button>

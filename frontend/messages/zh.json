@@ -48,42 +48,100 @@
     "skipToContent": "跳转到主要内容",
     "language": "语言",
     "network": "网络",
-    "airdrop": "空投"
+    "airdrop": "空投",
+    "vesting": "归属",
+    "home": "概览",
+    "sections": {
+      "issue": "发行",
+      "distribute": "分发",
+      "account": "账户"
+    },
+    "openMenu": "打开菜单",
+    "closeMenu": "关闭菜单",
+    "theme": "外观",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统"
   },
   "home": {
-    "badge": "构建于 Stellar Soroban",
-    "title": "部署您的代币",
-    "titleHighlight": "数分钟完成",
-    "description": "SoroPad 是一个开源的部署平台，用于在 Soroban 上部署符合 SEP-41 标准的代币 — 包含归属计划、管理员控制和实时仪表板。无需智能合约代码。",
-    "deployButton": "部署代币",
-    "githubButton": "在 GitHub 上查看",
-    "lookupPlaceholder": "粘贴合约 ID 以查找任何代币…",
-    "lookupAriaLabel": "代币合约 ID",
-    "lookupButtonAria": "查找代币",
-    "lookupEmptyError": "请粘贴合约 ID 进行查找。",
-    "lookupInvalidError": "看起来不是有效的 Stellar 合约 ID（C + 55 个 base-32 字符）。",
-    "features": {
-      "deploy": {
-        "icon": "🪙",
-        "title": "一键部署",
-        "description": "填写表单，使用 Freighter 签名，您的 SEP-41 代币即可在 Soroban 上线。"
-      },
+    "title": "发行代币，并清楚知道哪些设置还能更改。",
+    "description": "SoroPad deploys SEP-41 tokens on Stellar with vesting, allowances and admin controls you can actually see. Some of those controls are permanent once used — this tells you which ones, before you use them.",
+    "deployButton": "发行代币",
+    "githubButton": "查看源码",
+    "lookupPlaceholder": "合约 ID（C…）",
+    "lookupAriaLabel": "Token contract ID",
+    "lookupButtonAria": "Look up token",
+    "lookupEmptyError": "Paste a contract ID to look it up.",
+    "lookupInvalidError": "That is not a valid Stellar contract ID. They start with C and are 56 characters.",
+    "lookupLabel": "查询代币",
+    "lookupSubmit": "查询",
+    "capabilities": {
+      "title": "What you can set up at launch",
+      "description": "Every one of these is enforced by the contract, not by this interface.",
       "vesting": {
-        "icon": "🔒",
-        "title": "归属与控制",
-        "description": "按钱包设置悬崖期 + 线性归属。管理员可铸造、销毁和冻结。"
+        "title": "Vesting schedules",
+        "description": "Cliff and linear release per recipient. The contract holds the tokens and reports whether it is funded for everything it has promised."
       },
-      "dashboard": {
-        "icon": "📊",
-        "title": "实时仪表板",
-        "description": "供应量指标、持有人表、归属进度 — 全部实时更新。"
+      "airdrop": {
+        "title": "Merkle airdrops",
+        "description": "Publish a root, let recipients claim against it. No list to host and no per-recipient transaction to pay for."
+      },
+      "allowances": {
+        "title": "Allowances",
+        "description": "Let another account spend a set amount on your behalf, with an expiry. Revoke at any time."
+      },
+      "supply": {
+        "title": "Supply limits",
+        "description": "Set a hard cap at launch, and a per-account ceiling that stops any one holder taking more than a share of supply."
+      },
+      "compliance": {
+        "title": "Compliance checks",
+        "description": "Point the token at a contract that approves or rejects each transfer, for tokens that need a rule applied before they move."
+      },
+      "controls": {
+        "title": "Holder controls",
+        "description": "Freeze an account, claw tokens back, or require holders to be authorised before they can receive."
+      }
+    },
+    "permanent": {
+      "title": "The decisions you cannot take back",
+      "description": "Four actions are one-way. The interface makes you hold the button down for these, and says so first.",
+      "revokeAdmin": {
+        "title": "Revoking admin",
+        "description": "Locks the contract for good. No further minting, freezing, pausing or upgrades — by anyone, ever."
+      },
+      "renounce": {
+        "title": "Renouncing revocable authorisation",
+        "description": "Gives up your ability to withdraw a holder's authorisation. It cannot be re-enabled."
+      },
+      "upgrade": {
+        "title": "Upgrading the code",
+        "description": "Replaces the logic every holder is relying on. The old code is not kept."
+      },
+      "cap": {
+        "title": "Setting the supply cap",
+        "description": "The maximum supply is fixed at launch and cannot be raised afterwards."
+      }
+    },
+    "trust": {
+      "title": "Check it yourself",
+      "source": {
+        "title": "Open source",
+        "description": "Every contract and the whole interface. Read it before you trust it."
+      },
+      "hashes": {
+        "title": "Published build hashes",
+        "description": "The hash of each deployed contract is committed to the repo and re-checked on every push."
+      },
+      "testnet": {
+        "title": "Testnet first",
+        "description": "Launch the same token on testnet with the same tools, and change nothing but the network."
       }
     }
   },
   "deploy": {
-    "title": "部署您的",
-    "titleHighlight": "Soroban 代币",
-    "description": "在数分钟内启动生产就绪的 SEP-41 代币。配置您的元数据、供应量和管理权，然后部署到 Stellar 网络。",
+    "title": "发行代币",
+    "description": "四个步骤：代币信息、发行量、管理员，以及签名前的最终确认。",
     "steps": {
       "metadata": "元数据",
       "supply": "供应量",
@@ -149,8 +207,8 @@
     }
   },
   "dashboard": {
-    "title": "代币仪表板",
-    "description": "输入已部署代币的合约 ID 以查看供应量指标、持有人分布等。",
+    "title": "代币",
+    "description": "打开你发行的代币，或粘贴任意合约 ID 查看。",
     "searchPlaceholder": "CABC123...XYZ（合约 ID）",
     "searchLabel": "合约 ID",
     "viewMyAccount": "查看我的账户",
@@ -210,7 +268,13 @@
     "notATokenNote": "此仪表板仅支持符合 SEP-41 标准的代币合约。",
     "backToSearchLink": "返回搜索",
     "totalMinted": "迄今总铸造量",
-    "totalRecipients": "总接收者数"
+    "totalRecipients": "总接收者数",
+    "open": "打开",
+    "recent": "本浏览器发行的代币",
+    "recentEmpty": "你发行的代币会显示在这里。",
+    "connectPrompt": "连接钱包以查看你发行的代币。",
+    "launchToken": "发行代币",
+    "retry": "重试"
   },
   "token": {
     "fetchingData": "获取代币数据中...",
@@ -516,18 +580,21 @@
     "title": "最近发布",
     "description": "最近在 Stellar Soroban 上部署的代币",
     "error": "无法加载最近发布。",
-    "emptyTitle": "暂无最近发布",
-    "emptyDescription": "最近的代币发布需要配置索引器。您仍然可以使用仪表板部署和管理代币。",
-    "emptyAction": "部署代币",
-    "trending": "热门",
+    "emptyTitle": "暂无发行记录",
+    "emptyDescription": "该列表来自索引服务。未配置索引时会保持为空，但发行和管理代币不受影响。",
+    "emptyAction": "发行代币",
     "supply": "供应量",
     "contract": "合约",
     "deployed": "已部署",
-    "viewDashboard": "查看仪表板",
     "justNow": "刚刚",
     "minutesAgo": "{count} 分钟前",
     "hoursAgo": "{count} 小时前",
-    "daysAgo": "{count} 天前"
+    "daysAgo": "{count} 天前",
+    "loading": "正在加载…",
+    "retry": "重试",
+    "token": "代币",
+    "status": "状态",
+    "active": "活跃"
   },
   "transfer": {
     "connectTitle": "连接您的钱包",
@@ -667,5 +734,21 @@
     "description": "发生了意外错误。请尝试刷新页面。",
     "refreshButton": "刷新页面",
     "errorDetails": "错误详情：{error}"
+  },
+  "allowancesPage": {
+    "title": "授权",
+    "lede": "你授予其他账户动用代币的长期权限，可随时撤销。",
+    "tokenLabel": "代币合约",
+    "load": "加载",
+    "connectTitle": "连接钱包",
+    "connectDescription": "授权来自你的账户，需要先连接钱包才能显示。",
+    "emptyTitle": "该代币暂无授权",
+    "emptyDescription": "当你授权其他账户动用此代币后，会显示在这里。",
+    "grantTitle": "新增授权",
+    "listTitle": "已授予的授权",
+    "colSpender": "被授权方",
+    "colAmount": "额度",
+    "colStatus": "状态",
+    "revokeFailed": "撤销授权失败。"
   }
 }

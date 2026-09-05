@@ -214,7 +214,7 @@ export function AirdropClaim({ contractId }: Props) {
   /* ── Render ──────────────────────────────────────────────────────── */
 
   if (loading) {
-    return <p className="text-gray-400">{t("loading")}</p>;
+    return <p className="text-muted">{t("loading")}</p>;
   }
 
   if (loadError || !info) {
@@ -232,37 +232,37 @@ export function AirdropClaim({ contractId }: Props) {
   return (
     <div className="flex flex-col gap-8">
       {/* Airdrop summary */}
-      <section className="rounded-2xl border border-stellar-500/10 bg-void-800/40 p-6">
+      <section className="rounded-2xl border border-info/10 bg-sunken/40 p-6">
         <dl className="grid grid-cols-2 gap-5 sm:grid-cols-4">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">
+            <dt className="text-xs text-muted">
               {t("stillAvailable")}
             </dt>
-            <dd className="text-lg font-semibold text-white">
+            <dd className="text-lg font-semibold text-ink">
               {formatTokenAmount(info.remainingBalance, decimals)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">
+            <dt className="text-xs text-muted">
               {t("totalClaimed")}
             </dt>
-            <dd className="text-lg font-semibold text-white">
+            <dd className="text-lg font-semibold text-ink">
               {formatTokenAmount(info.totalClaimed, decimals)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">
+            <dt className="text-xs text-muted">
               {t("deadlineLedger")}
             </dt>
-            <dd className="text-lg font-semibold text-white">
+            <dd className="text-lg font-semibold text-ink">
               {info.deadlineLedger}
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wide text-gray-500">
+            <dt className="text-xs text-muted">
               {t("timeLeft")}
             </dt>
-            <dd className="text-lg font-semibold text-white">
+            <dd className="text-lg font-semibold text-ink">
               {closed
                 ? t("closed")
                 : ledgersToApproxDuration(ledgersLeft)}
@@ -286,11 +286,11 @@ export function AirdropClaim({ contractId }: Props) {
       )}
 
       {/* Claim */}
-      <section className="rounded-2xl border border-stellar-500/10 bg-void-800/40 p-6">
-        <h2 className="mb-1 text-lg font-semibold text-white">
+      <section className="rounded-2xl border border-info/10 bg-sunken/40 p-6">
+        <h2 className="mb-1 text-lg font-semibold text-ink">
           {t("yourAllocation")}
         </h2>
-        <p className="mb-5 text-sm text-gray-400">{t("proofFileHint")}</p>
+        <p className="mb-5 text-sm text-muted">{t("proofFileHint")}</p>
 
         {!connected ? (
           <Button type="button" onClick={() => void connect()}>
@@ -346,18 +346,18 @@ export function AirdropClaim({ contractId }: Props) {
               <>
                 <dl className="grid grid-cols-2 gap-5">
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500">
+                    <dt className="text-xs text-muted">
                       {t("yourAllocation")}
                     </dt>
-                    <dd className="text-2xl font-semibold text-stellar-300">
+                    <dd className="text-2xl font-semibold text-info">
                       {formatTokenAmount(allocation.amount, decimals)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500">
+                    <dt className="text-xs text-muted">
                       {t("claimStatus")}
                     </dt>
-                    <dd className="text-2xl font-semibold text-white">
+                    <dd className="text-2xl font-semibold text-ink">
                       {status?.claimed ? t("claimed") : t("unclaimed")}
                     </dd>
                   </div>

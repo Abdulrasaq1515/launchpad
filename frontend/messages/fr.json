@@ -48,42 +48,100 @@
     "skipToContent": "Aller au contenu principal",
     "language": "Langue",
     "network": "Réseau",
-    "airdrop": "Airdrop"
+    "airdrop": "Airdrop",
+    "vesting": "Acquisition",
+    "home": "Aperçu",
+    "sections": {
+      "issue": "Émettre",
+      "distribute": "Distribuer",
+      "account": "Compte"
+    },
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "theme": "Apparence",
+    "themeLight": "Clair",
+    "themeDark": "Sombre",
+    "themeSystem": "Système"
   },
   "home": {
-    "badge": "Construit sur Stellar Soroban",
-    "title": "Lancez Votre Token",
-    "titleHighlight": "En Minutes",
-    "description": "SoroPad est un launchpad open-source pour déployer des tokens conformes SEP-41 sur Soroban — avec des calendriers de vesting, des contrôles administrateur et un tableau de bord en temps réel. Pas de code smart-contract requis.",
-    "deployButton": "Déployer un Token",
-    "githubButton": "Voir sur GitHub",
-    "lookupPlaceholder": "Collez un ID de contrat pour rechercher un token…",
-    "lookupAriaLabel": "ID du contrat du token",
-    "lookupButtonAria": "Rechercher un token",
-    "lookupEmptyError": "Collez un ID de contrat pour le rechercher.",
-    "lookupInvalidError": "Cela ne ressemble pas à un ID de contrat Stellar valide (C + 55 caractères base-32).",
-    "features": {
-      "deploy": {
-        "icon": "🪙",
-        "title": "Déploiement en Un Clic",
-        "description": "Remplissez un formulaire, signez avec Freighter, et votre token SEP-41 est actif sur Soroban."
-      },
+    "title": "Émettez un jeton en sachant exactement ce que vous pourrez encore modifier.",
+    "description": "SoroPad deploys SEP-41 tokens on Stellar with vesting, allowances and admin controls you can actually see. Some of those controls are permanent once used — this tells you which ones, before you use them.",
+    "deployButton": "Lancer un jeton",
+    "githubButton": "Lire le code source",
+    "lookupPlaceholder": "ID du contrat (C…)",
+    "lookupAriaLabel": "Token contract ID",
+    "lookupButtonAria": "Look up token",
+    "lookupEmptyError": "Paste a contract ID to look it up.",
+    "lookupInvalidError": "That is not a valid Stellar contract ID. They start with C and are 56 characters.",
+    "lookupLabel": "Rechercher un jeton",
+    "lookupSubmit": "Rechercher",
+    "capabilities": {
+      "title": "What you can set up at launch",
+      "description": "Every one of these is enforced by the contract, not by this interface.",
       "vesting": {
-        "icon": "🔒",
-        "title": "Vesting et Contrôles",
-        "description": "Cliff + vesting linéaire par wallet. Mint, burn et gel avec contrôles administrateur."
+        "title": "Vesting schedules",
+        "description": "Cliff and linear release per recipient. The contract holds the tokens and reports whether it is funded for everything it has promised."
       },
-      "dashboard": {
-        "icon": "📊",
-        "title": "Tableau de Bord en Direct",
-        "description": "Métriques d'approvisionnement, tableau des holders, progression du vesting — tout en temps réel."
+      "airdrop": {
+        "title": "Merkle airdrops",
+        "description": "Publish a root, let recipients claim against it. No list to host and no per-recipient transaction to pay for."
+      },
+      "allowances": {
+        "title": "Allowances",
+        "description": "Let another account spend a set amount on your behalf, with an expiry. Revoke at any time."
+      },
+      "supply": {
+        "title": "Supply limits",
+        "description": "Set a hard cap at launch, and a per-account ceiling that stops any one holder taking more than a share of supply."
+      },
+      "compliance": {
+        "title": "Compliance checks",
+        "description": "Point the token at a contract that approves or rejects each transfer, for tokens that need a rule applied before they move."
+      },
+      "controls": {
+        "title": "Holder controls",
+        "description": "Freeze an account, claw tokens back, or require holders to be authorised before they can receive."
+      }
+    },
+    "permanent": {
+      "title": "The decisions you cannot take back",
+      "description": "Four actions are one-way. The interface makes you hold the button down for these, and says so first.",
+      "revokeAdmin": {
+        "title": "Revoking admin",
+        "description": "Locks the contract for good. No further minting, freezing, pausing or upgrades — by anyone, ever."
+      },
+      "renounce": {
+        "title": "Renouncing revocable authorisation",
+        "description": "Gives up your ability to withdraw a holder's authorisation. It cannot be re-enabled."
+      },
+      "upgrade": {
+        "title": "Upgrading the code",
+        "description": "Replaces the logic every holder is relying on. The old code is not kept."
+      },
+      "cap": {
+        "title": "Setting the supply cap",
+        "description": "The maximum supply is fixed at launch and cannot be raised afterwards."
+      }
+    },
+    "trust": {
+      "title": "Check it yourself",
+      "source": {
+        "title": "Open source",
+        "description": "Every contract and the whole interface. Read it before you trust it."
+      },
+      "hashes": {
+        "title": "Published build hashes",
+        "description": "The hash of each deployed contract is committed to the repo and re-checked on every push."
+      },
+      "testnet": {
+        "title": "Testnet first",
+        "description": "Launch the same token on testnet with the same tools, and change nothing but the network."
       }
     }
   },
   "deploy": {
-    "title": "Déployez Votre",
-    "titleHighlight": "Token Soroban",
-    "description": "Lancez un token production-readyConforme SEP-41 en minutes. Configurez vos métadonnées, approvisionnement et gouvernance, puis déployez sur le réseau Stellar.",
+    "title": "Lancer un jeton",
+    "description": "Quatre étapes : ce qu'est le jeton, la quantité émise, qui l'administre, puis une relecture avant signature.",
     "steps": {
       "metadata": "Métadonnées",
       "supply": "Approvisionnement",
@@ -149,8 +207,8 @@
     }
   },
   "dashboard": {
-    "title": "Tableau de Bord du Token",
-    "description": "Entrez l'ID de contrat d'un token déployé pour voir les métriques d'approvisionnement, la distribution des holders, et plus.",
+    "title": "Jetons",
+    "description": "Ouvrez un jeton que vous avez lancé, ou collez un ID de contrat.",
     "searchPlaceholder": "CABC123...XYZ (ID de contrat)",
     "searchLabel": "ID de Contrat",
     "viewMyAccount": "Voir Mon Compte",
@@ -210,7 +268,13 @@
     "notATokenNote": "Ce tableau de bord ne prend en charge que les contrats de tokens conformes à SEP-41.",
     "backToSearchLink": "Retour à la Recherche",
     "totalMinted": "Total Minité à Ce Jour",
-    "totalRecipients": "Total des Destinataires"
+    "totalRecipients": "Total des Destinataires",
+    "open": "Ouvrir",
+    "recent": "Lancés depuis ce navigateur",
+    "recentEmpty": "Les jetons que vous lancez apparaîtront ici.",
+    "connectPrompt": "Connectez un portefeuille pour voir vos jetons.",
+    "launchToken": "Lancer un jeton",
+    "retry": "Réessayer"
   },
   "token": {
     "fetchingData": "Récupération des données du token...",
@@ -516,18 +580,21 @@
     "title": "Lancements Récents",
     "description": "Tokens récemment déployés sur Stellar Soroban",
     "error": "Impossible de charger les lancements récents.",
-    "emptyTitle": "Aucun lancement récent disponible",
-    "emptyDescription": "Les lancements récents de tokens nécessitent qu'un indexeur soit configuré. Vous pouvez toujours déployer et gérer des tokens en utilisant le tableau de bord.",
-    "emptyAction": "Déployer un Token",
-    "trending": "Tendance",
+    "emptyTitle": "Aucun lancement à afficher",
+    "emptyDescription": "Ce flux provient d'un indexeur. Sans indexeur configuré il reste vide ; déployer et gérer des jetons fonctionne malgré tout.",
+    "emptyAction": "Lancer un jeton",
     "supply": "Offre",
     "contract": "Contrat",
     "deployed": "Déployé",
-    "viewDashboard": "Voir le Tableau de Bord",
     "justNow": "à l'instant",
     "minutesAgo": "il y a {count}m",
     "hoursAgo": "il y a {count}h",
-    "daysAgo": "il y a {count}d"
+    "daysAgo": "il y a {count}d",
+    "loading": "Chargement des lancements…",
+    "retry": "Réessayer",
+    "token": "Jeton",
+    "status": "Statut",
+    "active": "Actif"
   },
   "transfer": {
     "connectTitle": "Connectez Votre Wallet",
@@ -667,5 +734,21 @@
     "description": "Une erreur inattendue s'est produite. Veuillez essayer d'actualiser la page.",
     "refreshButton": "Actualiser la Page",
     "errorDetails": "Détails de l'erreur : {error}"
+  },
+  "allowancesPage": {
+    "title": "Autorisations",
+    "lede": "Permissions permanentes accordées à un autre compte pour dépenser vos jetons. Révocables à tout moment.",
+    "tokenLabel": "Contrat du jeton",
+    "load": "Charger",
+    "connectTitle": "Connectez un portefeuille",
+    "connectDescription": "Les autorisations viennent de votre compte : un portefeuille connecté est nécessaire.",
+    "emptyTitle": "Aucune autorisation sur ce jeton",
+    "emptyDescription": "Lorsque vous autoriserez un compte à dépenser ce jeton, il apparaîtra ici.",
+    "grantTitle": "Accorder une autorisation",
+    "listTitle": "Autorisations accordées",
+    "colSpender": "Bénéficiaire",
+    "colAmount": "Montant",
+    "colStatus": "Statut",
+    "revokeFailed": "Impossible de révoquer l'autorisation."
   }
 }

@@ -100,8 +100,8 @@ export function AdminPanel({
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <ShieldAlert className="w-6 h-6 text-stellar-400" aria-hidden="true" />
-          <h2 className="text-2xl font-bold text-white tracking-tight">
+          <ShieldAlert className="w-6 h-6 text-info" aria-hidden="true" />
+          <h2 className="text-2xl font-bold text-ink tracking-tight">
             {t("title")}
           </h2>
         </div>
@@ -110,7 +110,7 @@ export function AdminPanel({
             href={`https://stellar.expert/explorer/${networkConfig.network}/tx/${admin.lastTxHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-stellar-400 hover:text-stellar-300 transition-colors bg-stellar-400/10 px-3 py-1.5 rounded-full border border-stellar-400/20"
+            className="flex items-center gap-1.5 text-xs text-info hover:text-info transition-colors bg-info-soft px-3 py-1.5 rounded-full border border-info/20"
           >
             {t("lastTx", { hash: admin.lastTxHash.slice(0, 8) })}
             <ExternalLink className="w-3 h-3" aria-hidden="true" />
@@ -119,13 +119,13 @@ export function AdminPanel({
       </div>
 
       {state.paused && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-warn/30 bg-warn-soft p-4">
           <CircleAlert
-            className="mt-0.5 h-5 w-5 shrink-0 text-orange-400"
+            className="mt-0.5 h-5 w-5 shrink-0 text-warn"
             aria-hidden="true"
           />
           <div className="text-sm">
-            <p className="font-semibold text-orange-200">{t("contractPaused")}</p>
+            <p className="font-semibold text-warn">{t("contractPaused")}</p>
             <p className="mt-1 text-xs leading-relaxed text-orange-100/80">
               {t("contractPausedDesc")}
             </p>
@@ -134,13 +134,13 @@ export function AdminPanel({
       )}
 
       {state.locked && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-warn/30 bg-warn-soft p-4">
           <Lock
-            className="mt-0.5 h-5 w-5 shrink-0 text-yellow-400"
+            className="mt-0.5 h-5 w-5 shrink-0 text-warn"
             aria-hidden="true"
           />
           <div className="text-sm">
-            <p className="font-semibold text-yellow-200">
+            <p className="font-semibold text-warn">
               {t("adminRevoked")}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-yellow-100/80">

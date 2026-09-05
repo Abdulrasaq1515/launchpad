@@ -122,18 +122,18 @@ export default function ActivityFeed({
   if (loading) {
     return (
       <div className="flex justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-stellar-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-info" />
       </div>
     );
   }
 
   if (error) {
-    return <div className="p-4 text-center text-sm text-red-400">{error}</div>;
+    return <div className="p-4 text-center text-sm text-danger">{error}</div>;
   }
 
   if (operations.length === 0) {
     return (
-      <div className="glass-card p-8 text-center text-sm text-gray-500">
+      <div className="panel p-8 text-center text-sm text-muted">
         No token activity found for this account/contract.
       </div>
     );
@@ -142,61 +142,61 @@ export default function ActivityFeed({
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "mint":
-        return <Droplets className="h-4 w-4 text-blue-400" />;
+        return <Droplets className="h-4 w-4 text-info" />;
       case "burn":
       case "clawback":
-        return <Flame className="h-4 w-4 text-red-400" />;
+        return <Flame className="h-4 w-4 text-danger" />;
       case "transfer":
-        return <ArrowLeftRight className="h-4 w-4 text-green-400" />;
+        return <ArrowLeftRight className="h-4 w-4 text-ok" />;
       case "freeze":
         return <SnowflakeIcon className="h-4 w-4 text-cyan-400" />;
       case "unfreeze":
         return <SnowflakeIcon className="h-4 w-4 text-teal-400" />;
       case "pause":
-        return <PauseCircle className="h-4 w-4 text-yellow-400" />;
+        return <PauseCircle className="h-4 w-4 text-warn" />;
       case "unpause":
-        return <PlayCircle className="h-4 w-4 text-green-400" />;
+        return <PlayCircle className="h-4 w-4 text-ok" />;
       case "authorize":
-        return <ShieldCheck className="h-4 w-4 text-emerald-400" />;
+        return <ShieldCheck className="h-4 w-4 text-ok" />;
       case "rev_auth":
-        return <ShieldOff className="h-4 w-4 text-orange-400" />;
+        return <ShieldOff className="h-4 w-4 text-warn" />;
       case "set_admin":
-        return <UserCheck className="h-4 w-4 text-stellar-400" />;
+        return <UserCheck className="h-4 w-4 text-info" />;
       case "revoked":
-        return <UserX className="h-4 w-4 text-red-400" />;
+        return <UserX className="h-4 w-4 text-danger" />;
       case "upgrade":
-        return <Upload className="h-4 w-4 text-purple-400" />;
+        return <Upload className="h-4 w-4 text-warn" />;
 
       // ── Vesting contract ──
       case "vesting:create":
-        return <CalendarPlus className="h-4 w-4 text-blue-400" />;
+        return <CalendarPlus className="h-4 w-4 text-info" />;
       case "vesting:batch":
-        return <Layers className="h-4 w-4 text-blue-400" />;
+        return <Layers className="h-4 w-4 text-info" />;
       case "vesting:release":
-        return <HandCoins className="h-4 w-4 text-green-400" />;
+        return <HandCoins className="h-4 w-4 text-ok" />;
       case "vesting:revoke":
-        return <Ban className="h-4 w-4 text-red-400" />;
+        return <Ban className="h-4 w-4 text-danger" />;
       case "vesting:clf_ext":
-        return <CalendarClock className="h-4 w-4 text-amber-400" />;
+        return <CalendarClock className="h-4 w-4 text-warn" />;
       case "vesting:prune":
-        return <Eraser className="h-4 w-4 text-gray-400" />;
+        return <Eraser className="h-4 w-4 text-muted" />;
       case "vesting:prop_adm":
-        return <UserCog className="h-4 w-4 text-stellar-400" />;
+        return <UserCog className="h-4 w-4 text-info" />;
       case "vesting:acc_adm":
-        return <UserCheck className="h-4 w-4 text-stellar-400" />;
+        return <UserCheck className="h-4 w-4 text-info" />;
       case "vesting:revoked":
-        return <UserX className="h-4 w-4 text-red-400" />;
+        return <UserX className="h-4 w-4 text-danger" />;
       case "vesting:init":
-        return <Rocket className="h-4 w-4 text-purple-400" />;
+        return <Rocket className="h-4 w-4 text-warn" />;
       case "vesting:pause":
-        return <PauseCircle className="h-4 w-4 text-yellow-400" />;
+        return <PauseCircle className="h-4 w-4 text-warn" />;
       case "vesting:unpause":
-        return <PlayCircle className="h-4 w-4 text-green-400" />;
+        return <PlayCircle className="h-4 w-4 text-ok" />;
       case "vesting:upgrade":
-        return <Upload className="h-4 w-4 text-purple-400" />;
+        return <Upload className="h-4 w-4 text-warn" />;
 
       default:
-        return <ArrowRight className="h-4 w-4 text-gray-400" />;
+        return <ArrowRight className="h-4 w-4 text-muted" />;
     }
   };
 
@@ -240,75 +240,75 @@ export default function ActivityFeed({
   const getStyleForType = (type: string) => {
     switch (type) {
       case "mint":
-        return "text-blue-400 bg-blue-400/10 border-blue-400/20";
+        return "text-info bg-info-soft border-info/20";
       case "burn":
       case "clawback":
       case "revoked":
       case "vesting:revoke":
       case "vesting:revoked":
-        return "text-red-400 bg-red-400/10 border-red-400/20";
+        return "text-danger bg-danger-soft border-danger/20";
       case "transfer":
       case "unpause":
       case "authorize":
       case "vesting:release":
       case "vesting:unpause":
-        return "text-green-400 bg-green-400/10 border-green-400/20";
+        return "text-ok bg-ok-soft border-ok/20";
       case "vesting:create":
       case "vesting:batch":
-        return "text-blue-400 bg-blue-400/10 border-blue-400/20";
+        return "text-info bg-info-soft border-info/20";
       case "vesting:clf_ext":
-        return "text-amber-400 bg-amber-400/10 border-amber-400/20";
+        return "text-warn bg-warn-soft border-warn/20";
       case "vesting:prop_adm":
       case "vesting:acc_adm":
-        return "text-stellar-400 bg-stellar-400/10 border-stellar-400/20";
+        return "text-info bg-info-soft border-info/20";
       case "vesting:init":
       case "vesting:upgrade":
-        return "text-purple-400 bg-purple-400/10 border-purple-400/20";
+        return "text-warn bg-warn-soft border-warn/25";
       case "freeze":
         return "text-cyan-400 bg-cyan-400/10 border-cyan-400/20";
       case "unfreeze":
         return "text-teal-400 bg-teal-400/10 border-teal-400/20";
       case "pause":
       case "vesting:pause":
-        return "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
+        return "text-warn bg-warn-soft border-warn/20";
       case "rev_auth":
-        return "text-orange-400 bg-orange-400/10 border-orange-400/20";
+        return "text-warn bg-warn-soft border-warn/20";
       case "set_admin":
-        return "text-stellar-400 bg-stellar-400/10 border-stellar-400/20";
+        return "text-info bg-info-soft border-info/20";
       case "upgrade":
-        return "text-purple-400 bg-purple-400/10 border-purple-400/20";
+        return "text-warn bg-warn-soft border-warn/25";
       default:
-        return "text-gray-400 bg-gray-400/10 border-gray-400/20";
+        return "text-muted bg-gray-400/10 border-gray-400/20";
     }
   };
 
   return (
-    <div className="glass-card overflow-hidden">
+    <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-white/5 bg-white/5">
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="border-b border-line/5 bg-sunken">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted">
                 Type
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted">
                 Amount
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted">
                 From
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted">
                 To
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted">
                 Time
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted">
                 Tx
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-line/5">
             {operations.map((op, i) => (
               <tr
                 key={`${op.id}-${i}`}
@@ -322,10 +322,10 @@ export default function ActivityFeed({
                     {getTypeLabel(op.type)}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-white">
+                <td className="px-4 py-3 text-right data text-ink">
                   {op.amount !== "-" ? op.amount : "-"}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-stellar-300">
+                <td className="px-4 py-3 data text-xs text-info">
                   {op.subject ? (
                     <ExplorerLink
                       type="account"
@@ -346,7 +346,7 @@ export default function ActivityFeed({
                     "-"
                   )}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-stellar-300">
+                <td className="px-4 py-3 data text-xs text-info">
                   {op.to !== "-" ? (
                     <ExplorerLink
                       type="account"
@@ -359,7 +359,7 @@ export default function ActivityFeed({
                     "-"
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-xs text-gray-400">
+                <td className="px-4 py-3 text-right text-xs text-muted">
                   {new Date(op.timestamp).toLocaleString(undefined, {
                     month: "short",
                     day: "numeric",
@@ -385,7 +385,7 @@ export default function ActivityFeed({
       </div>
 
       {nextCursor && (
-        <div className="border-t border-white/5 p-4 text-center">
+        <div className="border-t border-line/5 p-4 text-center">
           <button
             onClick={() => performFetch(true)}
             disabled={loadingMore}

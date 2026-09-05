@@ -88,7 +88,7 @@ export function HoldersTable({
 
   if (holders.length === 0) {
     return (
-      <div className="glass-card p-8 text-center text-gray-500">
+      <div className="panel p-8 text-center text-muted">
         <p>{emptyMessage}</p>
         <p className="mt-1 text-xs">
           {t("sorobanNote")}
@@ -98,11 +98,11 @@ export function HoldersTable({
   }
 
   const thClass =
-    "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:text-gray-300 transition-colors";
+    "px-4 py-3 text-left text-xs font-medium text-muted cursor-pointer select-none hover:text-body transition-colors";
 
   return (
     <div className="space-y-4">
-      <div className="glass-card p-4">
+      <div className="panel p-4">
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <input
@@ -113,11 +113,11 @@ export function HoldersTable({
                 setCurrentPage(1);
               }}
               placeholder={t("searchPlaceholder")}
-              className="w-full rounded-lg border border-white/10 bg-void-800 px-4 py-2 pl-10 text-sm text-white placeholder-gray-500 outline-none focus:border-stellar-500 focus:ring-1 focus:ring-stellar-500"
+              className="w-full rounded-lg border border-line bg-sunken px-4 py-2 pl-10 text-sm text-ink placeholder-faint outline-none focus:border-info focus:ring-1 focus:ring-info"
               aria-label={t("searchAria")}
             />
             <svg
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -137,7 +137,7 @@ export function HoldersTable({
                 searchQuery ? "filtered_holders" : "current_page_holders",
               )
             }
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-stellar-400/30 hover:bg-stellar-500/10 hover:text-stellar-300 whitespace-nowrap"
+            className="inline-flex items-center gap-2 rounded-lg border border-line bg-sunken px-3 py-2 text-xs font-medium text-body transition-colors hover:border-info/30 hover:bg-info-soft hover:text-info whitespace-nowrap"
             title={
               searchQuery
                 ? t("exportFiltered", { count: paginatedHolders.length })
@@ -161,15 +161,15 @@ export function HoldersTable({
           </button>
         </div>
         {searchQuery && (
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-muted">
             {t("foundOf", { filtered: filtered.length, holders: holders.length })}
           </p>
         )}
       </div>
 
-      <div className="glass-card overflow-hidden">
+      <div className="panel overflow-hidden">
         {filtered.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-muted">
             <p>{t("noMatching", { query: searchQuery })}</p>
           </div>
         ) : (
@@ -177,7 +177,7 @@ export function HoldersTable({
             <div className="overflow-x-auto">
               <table className="w-full text-sm" role="table">
                 <thead>
-                  <tr className="border-b border-white/5">
+                  <tr className="border-b border-line/5">
                     <th
                       className={thClass}
                       onClick={() => toggleSort("address")}
@@ -231,11 +231,11 @@ export function HoldersTable({
                   {paginatedHolders.map((holder, i) => (
                     <tr
                       key={holder.address}
-                      className={`border-b border-white/5 transition-colors hover:bg-white/2 ${
+                      className={`border-b border-line/5 transition-colors hover:bg-white/2 ${
                         i % 2 === 0 ? "bg-white/1" : ""
                       }`}
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-stellar-300">
+                      <td className="px-4 py-3 data text-xs text-info">
                         <ExplorerLink
                           type="account"
                           identifier={holder.address}
@@ -244,18 +244,18 @@ export function HoldersTable({
                           showCopy={true}
                         />
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-white">
+                      <td className="px-4 py-3 text-right data text-ink">
                         {holder.balance}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-void-700 sm:block">
+                          <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-sunken sm:block">
                             <div
-                              className="h-full rounded-full bg-linear-to-r from-stellar-500 to-stellar-400"
+                              className="h-full rounded-full bg-ink"
                               style={{ width: `${Math.min(holder.sharePercent, 100)}%` }}
                             />
                           </div>
-                          <span className="font-mono text-gray-300">
+                          <span className="data text-body">
                             {holder.sharePercent.toFixed(2)}%
                           </span>
                         </div>
@@ -268,7 +268,7 @@ export function HoldersTable({
                               {t("frozen")}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-500">{t("active")}</span>
+                            <span className="text-[10px] text-muted">{t("active")}</span>
                           )}
                         </td>
                       )}
@@ -279,15 +279,15 @@ export function HoldersTable({
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-white/5 px-4 py-3">
-                <div className="text-xs text-gray-400">
+              <div className="flex items-center justify-between border-t border-line/5 px-4 py-3">
+                <div className="text-xs text-muted">
                   {t("pageInfo", { start: startIndex + 1, end: Math.min(endIndex, sorted.length), total: sorted.length })}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-stellar-400/30 hover:bg-stellar-500/10 hover:text-stellar-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-lg border border-line bg-sunken px-3 py-1.5 text-xs font-medium text-body transition-colors hover:border-info/30 hover:bg-info-soft hover:text-info disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label={t("previousPage")}
                   >
                     {t("previousPage")}
@@ -300,13 +300,13 @@ export function HoldersTable({
                         const showEllipsis = prevPage && page - prevPage > 1;
                         return (
                           <div key={page} className="flex items-center gap-1">
-                            {showEllipsis && <span className="px-2 text-xs text-gray-500">...</span>}
+                            {showEllipsis && <span className="px-2 text-xs text-muted">...</span>}
                             <button
                               onClick={() => setCurrentPage(page)}
                               className={`h-8 w-8 rounded-lg text-xs font-medium transition-colors ${
                                 currentPage === page
-                                  ? "bg-stellar-500 text-white"
-                                  : "border border-white/10 bg-white/5 text-gray-300 hover:border-stellar-400/30 hover:bg-stellar-500/10 hover:text-stellar-300"
+                                  ? "bg-info text-ink"
+                                  : "border border-line bg-sunken text-body hover:border-info/30 hover:bg-info-soft hover:text-info"
                               }`}
                               aria-label={t("goToPage", { page })}
                               aria-current={currentPage === page ? "page" : undefined}
@@ -320,7 +320,7 @@ export function HoldersTable({
                   <button
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-stellar-400/30 hover:bg-stellar-500/10 hover:text-stellar-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-lg border border-line bg-sunken px-3 py-1.5 text-xs font-medium text-body transition-colors hover:border-info/30 hover:bg-info-soft hover:text-info disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label={t("nextPage")}
                   >
                     {t("nextPage")}

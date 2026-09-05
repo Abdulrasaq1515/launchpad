@@ -48,7 +48,7 @@ export function MetadataCard({
         />
         <Button
           type="submit"
-          className="w-full bg-white/5 border-white/10 hover:bg-white/10 text-white"
+          className="w-full bg-sunken border-line hover:bg-sunken text-ink"
           disabled={disabled}
           isLoading={admin.loading === "metadata-uri"}
         >

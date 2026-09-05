@@ -34,12 +34,12 @@ export function PendingAdminBanner({
   return (
     <Alert variant="default" className="mb-6">
       <div className="flex items-start gap-3">
-        <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-stellar-400" />
+        <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-info" />
         <div>
           <AlertTitle>{title}</AlertTitle>
           <AlertDescription>
             A two-step admin transfer is in progress. Pending admin →{" "}
-            <span className="font-mono font-medium text-stellar-300">
+            <span className="data font-medium text-info">
               {truncateAddress(pendingAdmin)}
             </span>
             .{" "}

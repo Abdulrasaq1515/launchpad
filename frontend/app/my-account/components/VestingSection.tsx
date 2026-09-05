@@ -26,7 +26,7 @@ export function VestingSection({
 
   return (
     <section aria-label={t("vestingSchedules")} className="mb-10">
-      <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+      <h2 className="mb-4 text-sm font-medium text-muted">
         {t("vestingSchedules")}
       </h2>
       <VestingLookup

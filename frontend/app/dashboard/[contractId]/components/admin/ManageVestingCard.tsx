@@ -64,14 +64,14 @@ export function ManageVestingCard({
         <Input
           label="Vesting Contract"
           placeholder="C..."
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("vestingContract")}
           error={form.formState.errors.vestingContract?.message}
         />
         <Input
           label="Recipient Address"
           placeholder="G..."
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("recipient")}
           error={form.formState.errors.recipient?.message}
         />
@@ -79,7 +79,7 @@ export function ManageVestingCard({
           label="Schedule Index (optional)"
           type="number"
           placeholder="0"
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("scheduleIndex")}
           error={form.formState.errors.scheduleIndex?.message}
         />
@@ -97,11 +97,11 @@ export function ManageVestingCard({
           />
         )}
 
-        <div className="pt-2 border-t border-white/10">
-          <p className="text-[10px] uppercase tracking-widest text-stellar-400 font-bold mb-2">
+        <div className="pt-2 border-t border-line">
+          <p className="text-[10px] text-info font-bold mb-2">
             Extend Cliff
           </p>
-          <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+          <p className="text-xs text-muted mb-3 leading-relaxed">
             Push the cliff back by the number of days from now. Only works while
             the current cliff is still in the future.
           </p>
@@ -109,13 +109,13 @@ export function ManageVestingCard({
             label="New Cliff (Days from now)"
             type="number"
             placeholder="30"
-            className="bg-white/5 border-white/10"
+            className="bg-sunken border-line"
             {...form.register("newCliffDays")}
             error={form.formState.errors.newCliffDays?.message}
           />
           <Button
             type="button"
-            className="w-full mt-3 bg-stellar-500 hover:bg-stellar-600 text-white shadow-lg shadow-stellar-500/20"
+            className="w-full mt-3 bg-info hover:bg-info text-ink"
             isLoading={admin.loading === "extend-cliff"}
             disabled={disabled}
             onClick={onExtendCliff}
@@ -128,20 +128,20 @@ export function ManageVestingCard({
           </Button>
         </div>
 
-        <div className="pt-2 border-t border-white/10">
-          <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold mb-2">
+        <div className="pt-2 border-t border-line">
+          <p className="text-[10px] text-danger font-bold mb-2">
             Revoke Schedule
           </p>
           {!showRevokeConfirm ? (
             <>
-              <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+              <p className="text-xs text-muted mb-3 leading-relaxed">
                 Cancels the schedule. Vested tokens are released to the
                 recipient and all unvested tokens return to the admin.
               </p>
               <Button
                 type="button"
                 variant="secondary"
-                className="w-full border-red-500/20 text-red-400 hover:border-red-500/40"
+                className="w-full border-danger/20 text-danger hover:border-danger/40"
                 disabled={disabled}
                 onClick={form.handleSubmit(() => setShowRevokeConfirm(true))}
               >
@@ -152,7 +152,8 @@ export function ManageVestingCard({
             <ConfirmPanel
               title="Confirm Revocation"
               message="Unvested tokens will be returned to the admin and the schedule will be permanently revoked. This cannot be undone."
-              confirmLabel="Confirm Revoke"
+              confirmLabel="Revoke schedule"
+              hold
               successLabel="Revoked"
               succeeded={admin.success === "vesting-revoke"}
               isLoading={admin.loading === "vesting-revoke"}

@@ -144,15 +144,15 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
   if (!tokenInfo) return null;
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 animate-fade-in-up">
+    <div className="mx-auto max-w-5xl px-6 py-10">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">
+        <h1 className="text-3xl font-bold text-ink">
           {tokenInfo.name}{" "}
-          <span className="text-stellar-400">({tokenInfo.symbol})</span>
+          <span className="text-info">({tokenInfo.symbol})</span>
         </h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
-          <span className="text-xs text-gray-500">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+          <span className="text-xs text-muted">
             {t("sections.contractId")}:
           </span>
           <ExplorerLink
@@ -169,7 +169,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
 
       {/* Token info grid */}
       <section aria-label={t("sections.tokenDetails")} className="mb-10">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+        <h2 className="mb-4 text-sm font-medium text-muted">
           {t("sections.tokenDetails")}
         </h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -210,12 +210,12 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
       {/* Metadata URI */}
       {tokenInfo.contractUri && (
         <section aria-label="Metadata URI" className="mb-10">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+          <h2 className="mb-4 text-sm font-medium text-muted">
             Metadata
           </h2>
-          <div className="glass-card flex flex-col gap-1 p-4">
+          <div className="panel flex flex-col gap-1 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span className="text-xs font-medium text-muted">
                 URI
               </span>
             </div>
@@ -223,7 +223,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
               href={tokenInfo.contractUri}
               target="_blank"
               rel="noopener noreferrer"
-              className="truncate text-lg font-semibold text-stellar-400 hover:text-stellar-300 transition-colors"
+              className="truncate text-lg font-semibold text-info hover:text-info transition-colors"
             >
               {tokenInfo.contractUri}
             </a>
@@ -268,7 +268,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
       {/* Top holders */}
       <section aria-label={t("sections.topHolders")}>
         <div className="mb-4">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500">
+          <h2 className="text-sm font-medium text-muted">
             {t("sections.topHolders")}
           </h2>
         </div>
@@ -285,7 +285,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
 
       {/* Vesting schedule */}
       <section aria-label={t("sections.vestingSchedule")} className="mt-10">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+        <h2 className="mb-4 text-sm font-medium text-muted">
           {t("sections.vestingSchedule")}
         </h2>
         <VestingProgress decimals={tokenInfo.decimals} />
@@ -294,7 +294,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
       {/* Transaction History */}
       <section
         aria-label={t("sections.transactionHistory")}
-        className="mt-16 border-t border-white/5 pt-10"
+        className="mt-16 border-t border-line/5 pt-10"
       >
         <TransactionHistory
           contractId={contractId}
@@ -305,7 +305,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
 
       {/* Token Activity Feed */}
       <section aria-label={t("sections.tokenActivity")} className="mt-10">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+        <h2 className="mb-4 text-sm font-medium text-muted">
           {t("sections.tokenActivity")}
         </h2>
         <ActivityFeed

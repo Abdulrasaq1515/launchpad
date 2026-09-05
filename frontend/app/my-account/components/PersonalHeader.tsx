@@ -20,9 +20,9 @@ export function PersonalHeader({
   return (
     <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
-        <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
-          <span className="font-mono text-xs">
+        <h1 className="text-3xl font-bold text-ink">{t("title")}</h1>
+        <div className="mt-2 flex items-center gap-2 text-sm text-muted">
+          <span className="data text-xs">
             <span className="hidden md:inline">{publicKey}</span>
             <span className="md:hidden">{truncateAddress(publicKey, 8)}</span>
           </span>

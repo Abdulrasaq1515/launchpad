@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "./providers/WalletProvider";
 import { SettingsProvider } from "./providers/SettingsProvider";
@@ -9,18 +9,27 @@ import { AccessibilityProvider } from "./providers/AccessibilityProvider";
 import { LocaleProvider } from "./providers/LocaleProvider";
 import { I18nProvider } from "./providers/I18nProvider";
 import { ToastProvider } from "./providers/ToastProvider";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Navbar } from "./components/Navbar";
-import { MainnetWarning } from "./components/MainnetWarning";
-import Footer from "./components/Footer";
+import { AppShell } from "./components/AppShell";
+import { ThemeScript } from "./components/ThemeToggle";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Archivo: a grotesque with slightly narrow, upright letterforms — it keeps
+// long contract names and dense tables legible at small sizes without the
+// neutral-startup feel of the usual UI sans.
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
+  display: "swap",
+  axes: ["wdth"],
 });
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+
+// Plex Mono for machine data only: addresses, hashes, token amounts. Its
+// slashed zero and distinct 1/l matter when someone is checking a contract ID
+// character by character before signing.
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -45,9 +54,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
-      >
+      <head>
+        <ThemeScript />
+      </head>
+      <body className={`${archivo.variable} ${plexMono.variable} min-h-screen`}>
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
@@ -58,12 +68,7 @@ export default function RootLayout({
                 <SettingsProvider>
                   <WalletProvider>
                     <AccessibilityProvider>
-                      <Navbar />
-                      <MainnetWarning />
-                      <main id="main-content" className="pt-16" role="main">
-                        <ErrorBoundary>{children}</ErrorBoundary>
-                      </main>
-                      <Footer />
+                      <AppShell>{children}</AppShell>
                     </AccessibilityProvider>
                   </WalletProvider>
                 </SettingsProvider>

@@ -160,8 +160,8 @@ export function ApproveForm({ onSuccess, onError }: ApproveFormProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white mb-4">Grant Allowance</h2>
-        <p className="text-sm text-gray-400 mb-6">
+        <h2 className="text-xl font-semibold text-ink mb-4">Grant Allowance</h2>
+        <p className="text-sm text-muted mb-6">
           Grant a spender address the right to transfer tokens on your behalf.
         </p>
       </div>
@@ -171,7 +171,7 @@ export function ApproveForm({ onSuccess, onError }: ApproveFormProps) {
           label="Token Contract ID"
           {...register("tokenContractId")}
           placeholder="C..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.tokenContractId?.message}
         />
 
@@ -179,7 +179,7 @@ export function ApproveForm({ onSuccess, onError }: ApproveFormProps) {
           label="Spender Address"
           {...register("spenderAddress")}
           placeholder="G..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.spenderAddress?.message}
         />
 
@@ -213,11 +213,11 @@ export function ApproveForm({ onSuccess, onError }: ApproveFormProps) {
       )}
 
       {txHash && (
-        <div className="flex items-center gap-3 p-4 bg-green-600/10 border border-green-600/50 rounded-lg">
-          <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 p-4 bg-ok-soft border border-ok/50 rounded-lg">
+          <CheckCircle className="h-5 w-5 text-ok flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-green-400">Allowance granted!</p>
-            <p className="text-xs text-green-300">TX: {txHash}</p>
+            <p className="text-sm font-medium text-ok">Allowance granted!</p>
+            <p className="text-xs text-ok">TX: {txHash}</p>
           </div>
         </div>
       )}

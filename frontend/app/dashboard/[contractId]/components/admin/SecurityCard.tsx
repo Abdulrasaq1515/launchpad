@@ -50,18 +50,18 @@ export function SecurityCard({
       accent="yellow"
       description="Halt the whole token, or quarantine a single account."
     >
-      <p className="text-[10px] uppercase tracking-widest text-yellow-400 font-bold mb-3">
+      <p className="text-[10px] text-warn font-bold mb-3">
         Circuit Breaker
       </p>
       {paused ? (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-4 py-3 text-sm text-yellow-200">
+          <div className="flex items-center gap-2 rounded-lg border border-warn/20 bg-warn-soft px-4 py-3 text-sm text-warn">
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             Token is paused — mint, burn, transfer, and clawback are halted.
           </div>
           <Button
             type="button"
-            className="w-full bg-green-600 hover:bg-green-700 border-none shadow-lg shadow-green-600/20"
+            className="w-full bg-ok hover:bg-green-700 border-none shadow-green-600/20"
             onClick={togglePause}
             isLoading={admin.loading === "unpause"}
             disabled={disabled || locked}
@@ -75,7 +75,7 @@ export function SecurityCard({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm text-green-200">
+          <div className="flex items-center gap-2 rounded-lg border border-ok/20 bg-ok-soft px-4 py-3 text-sm text-ok">
             <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
             Token is active — all operations are running normally.
           </div>
@@ -84,7 +84,7 @@ export function SecurityCard({
             <Button
               type="button"
               variant="secondary"
-              className="w-full border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40"
+              className="w-full border-warn/20 text-warn hover:border-warn/40"
               disabled={disabled || locked}
               onClick={() => setShowPauseConfirm(true)}
             >
@@ -106,11 +106,11 @@ export function SecurityCard({
         </div>
       )}
 
-      <div className="mt-6 pt-4 border-t border-white/10">
-        <p className="text-[10px] uppercase tracking-widest text-yellow-400 font-bold mb-2">
+      <div className="mt-6 pt-4 border-t border-line">
+        <p className="text-[10px] text-warn font-bold mb-2">
           Freeze Account
         </p>
-        <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+        <p className="text-xs text-muted mb-3 leading-relaxed">
           A frozen account cannot send or burn its tokens, but can still
           receive them. Use this to quarantine one holder instead of pausing
           the whole token.
@@ -133,13 +133,13 @@ export function SecurityCard({
               successLabel: "Frozen",
               variant: "secondary",
               className:
-                "border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40",
+                "border-warn/20 text-warn hover:border-warn/40",
               confirm: {
                 accent: "yellow",
                 title: "Freeze this account?",
                 message:
-                  "The account will be unable to send or burn its tokens until you unfreeze it. Incoming transfers still succeed.",
-                confirmLabel: "Confirm Freeze",
+                  "The account will be unable to send, burn or receive tokens until you unfreeze it.",
+                confirmLabel: "Freeze account",
               },
             },
             {

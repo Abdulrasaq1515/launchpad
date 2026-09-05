@@ -30,14 +30,14 @@ export function LanguageSwitcher() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-white/10"
+        className="flex items-center gap-2 rounded-lg border border-line bg-sunken px-3 py-2 text-sm text-body transition-colors hover:bg-sunken"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label="Select language"
       >
-        <Globe className="h-4 w-4 text-stellar-400" />
+        <Globe className="h-4 w-4 text-info" />
         <span>{currentLabel}</span>
-        <ChevronDown className="h-3 w-3 text-gray-500" />
+        <ChevronDown className="h-3 w-3 text-muted" />
       </button>
 
       {isOpen && (
@@ -49,7 +49,7 @@ export function LanguageSwitcher() {
           <ul
             role="listbox"
             aria-label="Available languages"
-            className="absolute left-0 mt-2 w-36 origin-top-left rounded-xl border border-white/10 bg-void-800 p-1 shadow-2xl z-50"
+            className="absolute left-0 mt-2 w-36 origin-top-left rounded-xl border border-line bg-sunken p-1 z-50"
           >
             {SUPPORTED_LOCALES.map((l) => (
               <li key={l.code}>
@@ -60,8 +60,8 @@ export function LanguageSwitcher() {
                   onClick={() => handleSelect(l.code)}
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                     l.code === locale
-                      ? "bg-stellar-500/10 text-stellar-400"
-                      : "text-gray-400 hover:bg-white/5 hover:text-white"
+                      ? "bg-info-soft text-info"
+                      : "text-muted hover:bg-sunken hover:text-ink"
                   }`}
                 >
                   {l.label}

@@ -11,10 +11,10 @@ interface StepProps {
 export const StepSupply = ({ control, errors }: StepProps) => {
     const t = useTranslations("deploy.supply");
     return (
-        <div className="space-y-6 animate-fade-in-up">
+        <div className="space-y-6">
             <div className="text-left">
-                <h2 className="text-xl font-bold text-white mb-2">{t("title")}</h2>
-                <p className="text-sm text-gray-400">{t("description")}</p>
+                <h2 className="text-xl font-bold text-ink mb-2">{t("title")}</h2>
+                <p className="text-sm text-muted">{t("description")}</p>
             </div>
 
             <Controller

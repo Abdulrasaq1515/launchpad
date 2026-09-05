@@ -85,7 +85,7 @@ export function MintCard({
           <Input
             label="Recipient Address"
             placeholder="G..."
-            className="bg-white/5 border-white/10"
+            className="bg-sunken border-line"
             {...form.register("to")}
             error={form.formState.errors.to?.message}
           />
@@ -93,7 +93,7 @@ export function MintCard({
             label="Amount"
             type="number"
             placeholder="0.00"
-            className="bg-white/5 border-white/10"
+            className="bg-sunken border-line"
             {...form.register("amount")}
             error={form.formState.errors.amount?.message}
           />
@@ -111,7 +111,7 @@ export function MintCard({
           )}
           <Button
             type="submit"
-            className="w-full mt-4 shadow-lg shadow-stellar-500/20"
+            className="w-full mt-4"
             isLoading={admin.loading === "mint"}
             disabled={disabled}
           >
@@ -123,13 +123,13 @@ export function MintCard({
           <div className="flex flex-col gap-2">
             <label
               htmlFor="batch-mint-entries"
-              className="text-sm font-medium text-gray-300"
+              className="text-sm font-medium text-body"
             >
               Manual Entry (Address, Amount)
             </label>
             <textarea
               id="batch-mint-entries"
-              className="w-full h-32 bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-stellar-100 placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-stellar-500/50 resize-none"
+              className="w-full h-32 bg-sunken border border-line rounded-xl p-3 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-info/50 resize-none"
               placeholder="GC7... , 100.0&#10;GD2... , 50.5"
               value={batchData}
               onChange={(e) => {
@@ -146,10 +146,10 @@ export function MintCard({
               className="absolute inset-0 flex items-center"
               aria-hidden="true"
             >
-              <div className="w-full border-t border-white/5" />
+              <div className="w-full border-t border-line/5" />
             </div>
             <div className="relative flex justify-center">
-              <span className="px-2 bg-transparent text-[10px] uppercase tracking-widest text-gray-500">
+              <span className="px-2 bg-transparent text-[10px] text-muted">
                 Or Upload CSV
               </span>
             </div>
@@ -159,7 +159,7 @@ export function MintCard({
             type="file"
             accept=".csv"
             aria-label="Upload batch mint CSV"
-            className="block w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-stellar-500/10 file:text-stellar-400 hover:file:bg-stellar-500/20 transition-all cursor-pointer"
+            className="block w-full text-xs text-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-info-soft file:text-info hover:file:bg-info-soft transition-all cursor-pointer"
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
@@ -170,11 +170,11 @@ export function MintCard({
           />
 
           {batchErrors.length > 0 && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-              <p className="text-[10px] text-red-400 font-bold uppercase mb-1">
+            <div className="p-3 bg-danger-soft border border-danger/20 rounded-xl">
+              <p className="text-[10px] text-danger font-bold uppercase mb-1">
                 Errors Found:
               </p>
-              <ul className="text-[10px] text-red-300 space-y-1 list-disc list-inside">
+              <ul className="text-[10px] text-danger space-y-1 list-disc list-inside">
                 {batchErrors.slice(0, 3).map((err, i) => (
                   <li key={i}>{err}</li>
                 ))}
@@ -186,11 +186,11 @@ export function MintCard({
           )}
 
           {parsedEntries.length > 0 && batchErrors.length === 0 && (
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-between">
-              <span className="text-xs text-green-400 font-medium">
+            <div className="p-3 bg-ok-soft border border-ok/20 rounded-xl flex items-center justify-between">
+              <span className="text-xs text-ok font-medium">
                 {parsedEntries.length} valid entries ready
               </span>
-              <span className="text-[10px] text-green-500/70">
+              <span className="text-[10px] text-ok/70">
                 Total:{" "}
                 {parsedEntries
                   .reduce((acc, curr) => acc + parseFloat(curr.amount || "0"), 0)
@@ -201,7 +201,7 @@ export function MintCard({
 
           <Button
             type="button"
-            className="w-full mt-2 shadow-lg shadow-stellar-500/20"
+            className="w-full mt-2"
             isLoading={admin.loading === "batch-mint"}
             disabled={
               disabled || parsedEntries.length === 0 || batchErrors.length > 0

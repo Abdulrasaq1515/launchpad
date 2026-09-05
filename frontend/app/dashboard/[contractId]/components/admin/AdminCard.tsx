@@ -19,24 +19,24 @@ const ACCENTS: Record<
   { hover: string; text: string; chip: string }
 > = {
   stellar: {
-    hover: "hover:border-stellar-400/30",
-    text: "text-stellar-300",
-    chip: "bg-stellar-500/10",
+    hover: "hover:border-info/30",
+    text: "text-info",
+    chip: "bg-info-soft",
   },
   red: {
-    hover: "hover:border-red-500/30",
-    text: "text-red-400",
-    chip: "bg-red-500/10",
+    hover: "hover:border-danger/30",
+    text: "text-danger",
+    chip: "bg-danger-soft",
   },
   yellow: {
-    hover: "hover:border-yellow-500/30",
-    text: "text-yellow-400",
-    chip: "bg-yellow-500/10",
+    hover: "hover:border-warn/30",
+    text: "text-warn",
+    chip: "bg-warn-soft",
   },
   purple: {
-    hover: "hover:border-purple-500/30",
-    text: "text-purple-400",
-    chip: "bg-purple-500/10",
+    hover: "hover:border-warn/25",
+    text: "text-warn",
+    chip: "bg-warn-soft",
   },
 };
 
@@ -68,7 +68,7 @@ export function AdminCard({
   return (
     <section
       aria-label={title}
-      className={`glass-card p-6 flex flex-col ${styles.hover} transition-all duration-300 group ${
+      className={`panel p-6 flex flex-col ${styles.hover} transition-all duration-300 group ${
         wide ? "md:col-span-2" : ""
       } ${className}`}
     >
@@ -82,7 +82,7 @@ export function AdminCard({
           <div>
             <h3 className="font-bold text-lg">{title}</h3>
             {description && (
-              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+              <p className="text-xs text-muted mt-0.5 leading-relaxed">
                 {description}
               </p>
             )}
@@ -102,7 +102,7 @@ export function ModeToggle<T extends string>({
   value,
   options,
   onChange,
-  activeClassName = "bg-stellar-500",
+  activeClassName = "bg-info",
   label,
 }: {
   value: T;
@@ -115,7 +115,7 @@ export function ModeToggle<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className="flex bg-white/5 p-1 rounded-lg border border-white/10 shrink-0"
+      className="flex bg-sunken p-1 rounded-lg border border-line shrink-0"
     >
       {options.map((option) => (
         <button
@@ -125,8 +125,8 @@ export function ModeToggle<T extends string>({
           onClick={() => onChange(option.value)}
           className={`px-3 py-1 text-xs rounded-md transition-all ${
             value === option.value
-              ? `${activeClassName} text-white shadow-lg`
-              : "text-gray-400 hover:text-white"
+              ? `${activeClassName} text-ink`
+              : "text-muted hover:text-ink"
           }`}
         >
           {option.label}

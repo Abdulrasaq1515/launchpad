@@ -20,17 +20,17 @@ export function BalancesSection({
   const tc = useTranslations("common");
   return (
     <section aria-label={t("tokenBalances")} className="mb-10">
-      <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+      <h2 className="mb-4 text-sm font-medium text-muted">
         {t("tokenBalances")}
       </h2>
       {loading ? (
         <div className="flex justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-stellar-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-info" />
         </div>
       ) : error ? (
-        <div className="glass-card p-6 text-center">
-          <AlertCircle className="mx-auto mb-2 h-8 w-8 text-red-400" />
-          <p className="text-sm text-gray-400">{error}</p>
+        <div className="panel p-6 text-center">
+          <AlertCircle className="mx-auto mb-2 h-8 w-8 text-danger" />
+          <p className="text-sm text-muted">{error}</p>
           <button
             onClick={onRetry}
             className="btn-secondary mt-3 px-4 py-1.5 text-sm"
@@ -39,7 +39,7 @@ export function BalancesSection({
           </button>
         </div>
       ) : balances.length === 0 ? (
-        <div className="glass-card p-8 text-center text-sm text-gray-500">
+        <div className="panel p-8 text-center text-sm text-muted">
           {t("noBalances")}
         </div>
       ) : (

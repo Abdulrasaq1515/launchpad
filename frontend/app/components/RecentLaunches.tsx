@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useNetwork } from "../providers/NetworkProvider";
-import { Loader2, TrendingUp, ArrowRight } from "lucide-react";
+import { Loader2, Coins } from "lucide-react";
 import Link from "next/link";
 import type { RecentToken } from "@/lib/recentTokens";
 import { truncateAddress } from "@/lib/stellar";
 import { ContractVerificationBadge } from "@/components/ui/ContractVerificationBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Page } from "@/components/ui/Page";
 
 function timeAgo(iso: string): string {
   if (!iso) return "";
@@ -19,6 +20,14 @@ function timeAgo(iso: string): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+/**
+ * The live launch feed.
+ *
+ * A table rather than a grid of cards: these rows are compared against each
+ * other — which is newest, which is busiest, which is verified — and columns
+ * are what makes that comparison possible. Cards would give each token its own
+ * box and force the eye to re-find every value.
+ */
 export function RecentLaunches() {
   const t = useTranslations("recentLaunches");
   const { networkConfig } = useNetwork();
@@ -30,17 +39,10 @@ export function RecentLaunches() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/tokens/recent?network=${networkConfig.network}`,
-      );
+      const res = await fetch(`/api/tokens/recent?network=${networkConfig.network}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setTokens(Array.isArray(data) ? data : []);
-
-      const mercuryNote = res.headers.get("X-Note");
-      if (mercuryNote && data.length === 0) {
-        setError(null);
-      }
     } catch {
       setError(t("error"));
     } finally {
@@ -52,32 +54,42 @@ export function RecentLaunches() {
     load();
   }, [load]);
 
-  const maxScore = tokens.length
-    ? Math.max(...tokens.map((t) => t.activityScore))
-    : 0;
-  const trendingThreshold = Math.max(5, Math.floor(maxScore * 0.6));
+  const maxScore = tokens.length ? Math.max(...tokens.map((x) => x.activityScore)) : 0;
+  const activeThreshold = Math.max(5, Math.floor(maxScore * 0.6));
 
   return (
-    <section className="relative mx-auto max-w-6xl px-6 pb-24">
-      <div className="mb-10 text-center">
-        <h2 className="text-3xl font-bold text-white">{t("title")}</h2>
-        <p className="mt-2 text-sm text-gray-400">
-          {t("description")}
-        </p>
+    <Page wide>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            {t("title")}
+            {!loading && tokens.length > 0 && (
+              <span className="dot dot-live" aria-hidden />
+            )}
+          </h2>
+          <p className="mt-1 text-sm text-muted">{t("description")}</p>
+        </div>
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-stellar-400" />
+        <div className="panel flex items-center justify-center gap-2 py-14 text-sm text-muted">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          {t("loading")}
         </div>
       )}
 
       {!loading && error && (
-        <p className="text-center text-sm text-gray-500">{error}</p>
+        <div className="panel px-5 py-10 text-center">
+          <p className="text-sm text-muted">{error}</p>
+          <button onClick={load} className="btn btn-secondary mt-3">
+            {t("retry")}
+          </button>
+        </div>
       )}
 
       {!loading && !error && tokens.length === 0 && (
         <EmptyState
+          icon={Coins}
           title={t("emptyTitle")}
           description={t("emptyDescription")}
           actionLabel={t("emptyAction")}
@@ -86,68 +98,81 @@ export function RecentLaunches() {
       )}
 
       {!loading && !error && tokens.length > 0 && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {tokens.map((token) => (
-            <Link
-              key={token.contractId}
-              href={`/dashboard/${token.contractId}`}
-              className="glass-card group relative flex flex-col p-5 transition-all"
-            >
-              {token.activityScore >= trendingThreshold && (
-                <span className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-stellar-500/15 px-2.5 py-0.5 text-xs font-medium text-stellar-300">
-                  <TrendingUp className="h-3 w-3" />
-                  {t("trending")}
-                </span>
-              )}
-
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stellar-500/10 text-sm font-bold text-stellar-400">
-                  {token.symbol.slice(0, 2)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="truncate font-semibold text-white">
-                      {token.name}
-                    </h3>
-                    <ContractVerificationBadge
-                      contractId={token.contractId}
-                      networkConfig={networkConfig}
-                      compact
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400">{token.symbol}</p>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t("supply")}</span>
-                  <span className="text-gray-300">{token.totalSupply}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t("contract")}</span>
-                  <span className="font-mono text-xs text-gray-300">
-                    {truncateAddress(token.contractId)}
-                  </span>
-                </div>
-                {token.deployedAt && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">{t("deployed")}</span>
-                    <span className="text-gray-300">
-                      {timeAgo(token.deployedAt)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 flex items-center gap-1 text-xs font-medium text-stellar-400 opacity-0 transition-opacity group-hover:opacity-100">
-                {t("viewDashboard")}
-                <ArrowRight className="h-3 w-3" />
-              </div>
-            </Link>
-          ))}
+        <div className="panel overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line text-[0.75rem] text-muted">
+                  <th scope="col" className="px-4 py-2.5 font-medium">{t("token")}</th>
+                  <th scope="col" className="px-4 py-2.5 text-right font-medium">{t("supply")}</th>
+                  <th scope="col" className="hidden px-4 py-2.5 font-medium sm:table-cell">{t("contract")}</th>
+                  <th scope="col" className="hidden px-4 py-2.5 font-medium md:table-cell">{t("deployed")}</th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">
+                    <span className="sr-only">{t("status")}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {tokens.map((token) => (
+                  <tr
+                    key={token.contractId}
+                    className="group transition-colors duration-[120ms] hover:bg-sunken"
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/dashboard/${token.contractId}`}
+                        className="flex items-center gap-3 outline-none"
+                      >
+                        {/* Initials, not a generated avatar: the symbol is the
+                            token's real identifier and a colour-hashed blob
+                            would invent an identity it does not have. */}
+                        <span
+                          aria-hidden
+                          className="data flex h-7 w-7 flex-none items-center justify-center rounded-[6px] border border-line bg-sunken text-[0.6875rem] font-medium text-body"
+                        >
+                          {token.symbol.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-ink group-hover:underline">
+                            {token.name}
+                          </span>
+                          <span className="block text-[0.75rem] text-muted">
+                            {token.symbol}
+                          </span>
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="data whitespace-nowrap px-4 py-3 text-right text-body">
+                      {token.totalSupply}
+                    </td>
+                    <td className="data hidden whitespace-nowrap px-4 py-3 text-[0.8125rem] text-muted sm:table-cell">
+                      {truncateAddress(token.contractId)}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-[0.8125rem] text-muted md:table-cell">
+                      {token.deployedAt ? timeAgo(token.deployedAt) : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        {token.activityScore >= activeThreshold && (
+                          <span className="tag tag-ok">
+                            <span className="dot" aria-hidden />
+                            {t("active")}
+                          </span>
+                        )}
+                        <ContractVerificationBadge
+                          contractId={token.contractId}
+                          networkConfig={networkConfig}
+                          compact
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-    </section>
+    </Page>
   );
 }

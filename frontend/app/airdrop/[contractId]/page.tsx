@@ -26,11 +26,11 @@ export default async function AirdropClaimPage({ params }: PageProps) {
   if (!CONTRACT_ID_RE.test(contractId)) {
     return (
       <section className="mx-auto max-w-3xl px-6 py-16 text-center">
-        <h1 className="mb-2 text-2xl font-semibold text-white">
+        <h1 className="mb-2 text-2xl font-semibold text-ink">
           {t("invalidContractId")}
         </h1>
-        <p className="text-gray-400">{t("invalidContractIdMessage")}</p>
-        <Link href="/airdrop" className="mt-4 inline-block text-stellar-300 underline">
+        <p className="text-muted">{t("invalidContractIdMessage")}</p>
+        <Link href="/airdrop" className="mt-4 inline-block text-info underline">
           {t("backToBuilder")}
         </Link>
       </section>
@@ -39,11 +39,11 @@ export default async function AirdropClaimPage({ params }: PageProps) {
 
   return (
     <section className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="mb-2 text-3xl font-bold gradient-text">
+      <h1 className="mb-2 text-3xl font-bold text-ink">
         {t("claimTitle")}
       </h1>
-      <p className="mb-2 text-gray-400">{t("claimDescription")}</p>
-      <p className="mb-10 break-all font-mono text-xs text-gray-500">
+      <p className="mb-2 text-muted">{t("claimDescription")}</p>
+      <p className="mb-10 break-all data text-xs text-muted">
         {contractId}
       </p>
       <AirdropClaim contractId={contractId} />

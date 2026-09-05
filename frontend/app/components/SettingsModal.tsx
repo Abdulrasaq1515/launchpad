@@ -161,7 +161,7 @@ export function SettingsModal() {
       case "validating":
         return (
           <svg
-            className="h-4 w-4 animate-spin text-stellar-400"
+            className="h-4 w-4 animate-spin text-info"
             viewBox="0 0 24 24"
           >
             <circle
@@ -181,9 +181,9 @@ export function SettingsModal() {
           </svg>
         );
       case "valid":
-        return <CheckCircle className="h-4 w-4 text-green-400" />;
+        return <CheckCircle className="h-4 w-4 text-ok" />;
       case "invalid":
-        return <AlertCircle className="h-4 w-4 text-red-400" />;
+        return <AlertCircle className="h-4 w-4 text-danger" />;
       default:
         return null;
     }
@@ -200,7 +200,7 @@ export function SettingsModal() {
       {/* Trigger button */}
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-white/10 p-2 text-gray-400 transition-colors hover:border-stellar-400/30 hover:text-stellar-300"
+        className="rounded-lg border border-line p-2 text-muted transition-colors hover:border-info/30 hover:text-info"
         aria-label="Settings"
       >
         <Settings className="h-4 w-4" />
@@ -211,7 +211,7 @@ export function SettingsModal() {
         ref={dialogRef}
         onClose={handleClose}
         aria-labelledby="settings-title"
-        className="w-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-lg rounded-2xl border border-white/10 bg-void-800 p-0 text-white backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+        className="w-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-lg rounded-2xl border border-line bg-sunken p-0 text-ink backdrop:bg-black/60 backdrop:"
       >
         <div className="flex flex-col gap-6 p-6">
           {/* Header */}
@@ -219,21 +219,21 @@ export function SettingsModal() {
             <h2 id="settings-title" className="text-lg font-semibold">Network Settings</h2>
             <button
               onClick={handleClose}
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-lg p-1.5 text-muted transition-colors hover:bg-sunken hover:text-ink"
               aria-label="Close settings"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted">
             Configure custom Soroban RPC and Horizon URLs. Changes are saved to
             your browser and persist across sessions.
           </p>
 
           {/* Soroban RPC URL */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="rpc-url" className="ml-1 text-sm font-medium text-gray-300">
+            <label htmlFor="rpc-url" className="ml-1 text-sm font-medium text-body">
               Soroban RPC URL
             </label>
             <div className="relative">
@@ -249,10 +249,10 @@ export function SettingsModal() {
                 placeholder={defaultRpcUrl}
                 aria-describedby={rpcError ? "rpc-error" : undefined}
                 aria-invalid={rpcStatus === "invalid"}
-                className={`w-full rounded-xl border bg-void-800/50 px-4 py-3 pr-10 text-white placeholder:text-gray-500 transition-all duration-300 focus:outline-none focus:ring-1 ${
+                className={`w-full rounded-xl border bg-sunken/50 px-4 py-3 pr-10 text-ink placeholder:text-muted transition-all duration-300 focus:outline-none focus:ring-1 ${
                   rpcStatus === "invalid"
-                    ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
-                    : "border-stellar-500/10 focus:border-stellar-500/40 focus:ring-stellar-500/20"
+                    ? "border-danger/50 focus:border-danger/50 focus:ring-danger/20"
+                    : "border-info/10 focus:border-info/40 focus:ring-info/20"
                 }`}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2" aria-hidden="true">
@@ -260,13 +260,13 @@ export function SettingsModal() {
               </span>
             </div>
             {rpcError && (
-              <span id="rpc-error" className="ml-1 text-xs text-red-400" role="alert">{rpcError}</span>
+              <span id="rpc-error" className="ml-1 text-xs text-danger" role="alert">{rpcError}</span>
             )}
           </div>
 
           {/* Horizon URL */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="horizon-url" className="ml-1 text-sm font-medium text-gray-300">
+            <label htmlFor="horizon-url" className="ml-1 text-sm font-medium text-body">
               Horizon URL
             </label>
             <div className="relative">
@@ -282,10 +282,10 @@ export function SettingsModal() {
                 placeholder={defaultHorizonUrl}
                 aria-describedby={horizonError ? "horizon-error" : undefined}
                 aria-invalid={horizonStatus === "invalid"}
-                className={`w-full rounded-xl border bg-void-800/50 px-4 py-3 pr-10 text-white placeholder:text-gray-500 transition-all duration-300 focus:outline-none focus:ring-1 ${
+                className={`w-full rounded-xl border bg-sunken/50 px-4 py-3 pr-10 text-ink placeholder:text-muted transition-all duration-300 focus:outline-none focus:ring-1 ${
                   horizonStatus === "invalid"
-                    ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
-                    : "border-stellar-500/10 focus:border-stellar-500/40 focus:ring-stellar-500/20"
+                    ? "border-danger/50 focus:border-danger/50 focus:ring-danger/20"
+                    : "border-info/10 focus:border-info/40 focus:ring-info/20"
                 }`}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2" aria-hidden="true">
@@ -293,16 +293,16 @@ export function SettingsModal() {
               </span>
             </div>
             {horizonError && (
-              <span id="horizon-error" className="ml-1 text-xs text-red-400" role="alert">{horizonError}</span>
+              <span id="horizon-error" className="ml-1 text-xs text-danger" role="alert">{horizonError}</span>
             )}
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-between gap-3 border-t border-white/5 pt-4">
+          <div className="flex items-center justify-between gap-3 border-t border-line/5 pt-4">
             <button
               onClick={handleReset}
               disabled={isDefault}
-              className="inline-flex items-center gap-1.5 text-sm text-gray-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Reset to defaults

@@ -24,12 +24,12 @@ export function PersonalTransactionsSection({
 
   return (
     <section aria-label={t("transactionHistory")}>
-      <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+      <h2 className="mb-4 text-sm font-medium text-muted">
         {t("transactionHistory")}
       </h2>
       {loading ? (
         <div className="flex justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin text-stellar-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-info" />
         </div>
       ) : (
         <PersonalActivityTable

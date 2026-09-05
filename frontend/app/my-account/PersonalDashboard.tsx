@@ -257,7 +257,7 @@ export default function PersonalDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 animate-fade-in-up">
+    <div className="mx-auto w-full max-w-[84rem] px-4 py-6 sm:px-6 sm:py-8">
       <PersonalHeader
         publicKey={publicKey}
         refreshing={refreshing}
@@ -285,42 +285,42 @@ export default function PersonalDashboard() {
 
       {/* Burn Tokens Section */}
       <section aria-label="Burn tokens" className="mb-10">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
+        <h2 className="mb-4 text-sm font-medium text-muted">
           Token Actions
         </h2>
-        <div className="glass-card p-6 flex flex-col md:flex-row gap-6 hover:border-red-500/20 transition-all duration-300">
+        <div className="panel p-6 flex flex-col md:flex-row gap-6 hover:border-danger/20 transition-all duration-300">
           <div className="flex-1 space-y-4">
-            <div className="flex items-center gap-2 text-red-400 mb-2">
+            <div className="flex items-center gap-2 text-danger mb-2">
               <Flame className="w-5 h-5" />
               <h3 className="font-bold text-lg">Burn My Tokens</h3>
             </div>
-            <p className="text-sm text-gray-400 leading-relaxed">
+            <p className="text-sm text-muted leading-relaxed">
               Permanently remove tokens from your balance. This action is irreversible and will reduce the total supply.
             </p>
 
             {burnError && (
-              <div className="p-3 bg-red-400/10 border border-red-400/20 rounded-lg flex items-center gap-2 text-red-400 text-xs">
+              <div className="p-3 bg-danger-soft border border-danger/20 rounded-lg flex items-center gap-2 text-danger text-xs">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{burnError}</span>
               </div>
             )}
 
             {burnSuccess && (
-              <div className="p-3 bg-green-400/10 border border-green-400/20 rounded-lg flex items-center gap-2 text-green-400 text-xs">
+              <div className="p-3 bg-ok-soft border border-ok/20 rounded-lg flex items-center gap-2 text-ok text-xs">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Tokens burned successfully! Your balance has been updated.</span>
               </div>
             )}
           </div>
 
-          <div className="flex-1 space-y-4 bg-white/2 p-4 rounded-xl border border-white/5">
+          <div className="flex-1 space-y-4 bg-white/2 p-4 rounded-xl border border-line/5">
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1 block">Token Contract</label>
+                <label className="text-[0.75rem] font-medium text-muted mb-1 block">Token Contract</label>
                 <select
                   value={burnContractId}
                   onChange={(e) => setBurnContractId(e.target.value)}
-                  className="w-full bg-void-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-stellar-400/50 outline-none"
+                  className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-info/50 outline-none"
                 >
                   <option value="">Select a token...</option>
                   {balances.filter(b => b.assetIssuer).map(b => (
@@ -330,13 +330,13 @@ export default function PersonalDashboard() {
               </div>
 
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1 block">Amount to Burn</label>
+                <label className="text-[0.75rem] font-medium text-muted mb-1 block">Amount to Burn</label>
                 <Input
                   type="number"
                   value={burnAmount}
                   onChange={(e) => setBurnAmount(e.target.value)}
                   placeholder="0.00"
-                  className="bg-void-900 border-white/10"
+                  className="bg-sunken border-line"
                 />
               </div>
             </div>
@@ -344,7 +344,7 @@ export default function PersonalDashboard() {
             <Button
               onClick={handleBurn}
               disabled={burnLoading || !burnContractId || !burnAmount}
-              className="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-all group"
+              className="w-full bg-danger-soft hover:bg-danger-soft border border-danger/30 text-danger transition-all group"
               isLoading={burnLoading}
             >
               <Flame className="w-4 h-4 mr-2 group-hover:animate-pulse" />
@@ -357,7 +357,7 @@ export default function PersonalDashboard() {
       {/* My Deployed Tokens Section */}
       <section aria-label="My deployed tokens" className="mb-10">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500">
+          <h2 className="text-sm font-medium text-muted">
             My Deployed Tokens
           </h2>
           <div className="flex gap-2">
@@ -365,7 +365,7 @@ export default function PersonalDashboard() {
               value={importContractId}
               onChange={(e) => setImportContractId(e.target.value)}
               placeholder="Contract ID (C...)"
-              className="w-64 h-8 text-xs bg-void-900 border-white/10"
+              className="w-64 h-8 text-xs bg-sunken border-line"
             />
             <Button
               onClick={handleImportToken}
@@ -380,7 +380,7 @@ export default function PersonalDashboard() {
         </div>
 
         {importError && (
-          <p className="text-xs text-red-400 mb-4">{importError}</p>
+          <p className="text-xs text-danger mb-4">{importError}</p>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -388,21 +388,21 @@ export default function PersonalDashboard() {
             trackedTokens.map((token) => (
               <div 
                 key={token.contractId}
-                className="glass-card p-4 flex flex-col gap-3 hover:border-stellar-400/20 transition-all group"
+                className="panel p-4 flex flex-col gap-3 hover:border-info/20 transition-all group"
               >
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-stellar-400/10 flex items-center justify-center text-stellar-400 font-bold">
+                    <div className="w-10 h-10 rounded-full bg-info-soft flex items-center justify-center text-info font-bold">
                       {token.symbol[0]}
                     </div>
                     <div>
-                      <h3 className="font-bold text-white">{token.name}</h3>
-                      <p className="text-xs text-gray-400">{token.symbol}</p>
+                      <h3 className="font-bold text-ink">{token.name}</h3>
+                      <p className="text-xs text-muted">{token.symbol}</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => handleRemoveToken(token.contractId)}
-                    className="text-gray-500 hover:text-red-400 transition-colors"
+                    className="text-muted hover:text-danger transition-colors"
                     title="Remove from dashboard"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -410,19 +410,19 @@ export default function PersonalDashboard() {
                 </div>
                 
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase text-gray-500 font-bold">Contract ID</p>
-                  <p className="text-xs text-gray-300 font-mono break-all">{token.contractId}</p>
+                  <p className="text-[10px] uppercase text-muted font-bold">Contract ID</p>
+                  <p className="text-xs text-body data break-all">{token.contractId}</p>
                 </div>
 
-                <div className="flex justify-between items-center pt-2 border-t border-white/5">
-                  <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded uppercase">
+                <div className="flex justify-between items-center pt-2 border-t border-line/5">
+                  <span className="text-[10px] text-muted bg-sunken px-2 py-0.5 rounded uppercase">
                     {token.network}
                   </span>
                   <div className="flex items-center gap-3">
                     {token.vestingContractId && (
                       <button
                         onClick={() => doVestingLookup(token.vestingContractId!)}
-                        className="text-xs text-stellar-400 hover:text-stellar-300 font-medium"
+                        className="text-xs text-info hover:text-info font-medium"
                         title="Check vesting schedule for this deployment"
                       >
                         Check Vesting
@@ -430,7 +430,7 @@ export default function PersonalDashboard() {
                     )}
                     <Link
                       href={`/dashboard/${token.contractId}`}
-                      className="text-xs text-stellar-400 hover:text-stellar-300 flex items-center gap-1 group-hover:translate-x-1 transition-transform"
+                      className="text-xs text-info hover:text-info flex items-center gap-1 group-hover:translate-x-1 transition-transform"
                     >
                       View Dashboard
                       <ExternalLink className="w-3 h-3" />

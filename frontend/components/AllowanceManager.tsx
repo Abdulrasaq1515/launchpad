@@ -164,8 +164,8 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white mb-2">Token Allowances</h1>
-        <p className="text-sm text-gray-400">
+        <h1 className="text-2xl font-bold text-ink mb-2">Token Allowances</h1>
+        <p className="text-sm text-muted">
           Manage SEP-41 token allowances. Grant spenders permission to transfer
           tokens on your behalf, or transfer tokens using allowances granted to
           you.
@@ -177,20 +177,20 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
         <div
           className={`flex items-center gap-3 p-4 rounded-lg border ${
             notification.type === "success"
-              ? "bg-green-600/10 border-green-600/50"
-              : "bg-red-600/10 border-red-600/50"
+              ? "bg-ok-soft border-ok/50"
+              : "bg-danger-soft border-danger/50"
           }`}
         >
           {notification.type === "success" ? (
-            <CheckCircle className="h-5 w-5 text-green-400 shrink-0" />
+            <CheckCircle className="h-5 w-5 text-ok shrink-0" />
           ) : (
-            <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+            <AlertCircle className="h-5 w-5 text-danger shrink-0" />
           )}
           <p
             className={
               notification.type === "success"
-                ? "text-sm text-green-300"
-                : "text-sm text-red-300"
+                ? "text-sm text-ok"
+                : "text-sm text-danger"
             }
           >
             {notification.message}
@@ -199,7 +199,7 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
       )}
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-white/10">
+      <div className="flex gap-2 border-b border-line">
         <TabButton
           tab="view"
           label="View Allowances"
@@ -227,7 +227,7 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
       </div>
 
       {/* Tab Content */}
-      <div className="glass-card p-6">
+      <div className="panel p-6">
         {activeTab === "view" && (
           <div className="space-y-4">
             <div className="flex gap-3">
@@ -235,7 +235,7 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
                 value={viewContractId}
                 onChange={(e) => setViewContractId(e.target.value)}
                 placeholder="C..."
-                className="font-mono text-sm flex-1"
+                className="data text-sm flex-1"
               />
               <Button
                 onClick={loadAllowances}
@@ -250,23 +250,23 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
             </div>
 
             {allowancesError && (
-              <div className="flex items-center gap-3 p-4 bg-red-600/10 border border-red-600/50 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
-                <p className="text-sm text-red-300">{allowancesError}</p>
+              <div className="flex items-center gap-3 p-4 bg-danger-soft border border-danger/50 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-danger shrink-0" />
+                <p className="text-sm text-danger">{allowancesError}</p>
               </div>
             )}
 
             {isLoadingAllowances && (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-stellar-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-info" />
               </div>
             )}
 
             {!isLoadingAllowances && allowances.length === 0 && !allowancesError && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <AlertCircle className="h-8 w-8 text-gray-600" />
-                <p className="text-sm font-medium text-gray-300 mt-3">No allowances</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <AlertCircle className="h-8 w-8 text-faint" />
+                <p className="text-sm font-medium text-body mt-3">No allowances</p>
+                <p className="text-xs text-muted mt-1">
                   Enter a contract ID above and click Load Allowances.
                 </p>
               </div>
@@ -310,14 +310,14 @@ export function AllowanceManager({ contractId: initialContractId }: AllowanceMan
       </div>
 
       {/* Info Section */}
-      <div className="rounded-lg bg-blue-600/10 border border-blue-600/50 p-4">
+      <div className="rounded-lg bg-info-soft border border-info/50 p-4">
         <div className="flex gap-3">
-          <AlertTriangle className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+          <AlertTriangle className="h-5 w-5 text-info shrink-0 mt-0.5" />
           <div className="space-y-2">
-            <p className="text-sm font-medium text-blue-300">
+            <p className="text-sm font-medium text-info">
               How allowances work:
             </p>
-            <ul className="text-xs text-blue-200 space-y-1 list-disc list-inside">
+            <ul className="text-xs text-info space-y-1 list-disc list-inside">
               <li>
                 <strong>Grant:</strong> Set the maximum amount a spender can
                 transfer on your behalf
@@ -352,8 +352,8 @@ function TabButton({ label, active, onClick }: TabButtonProps) {
       onClick={onClick}
       className={`px-4 py-3 font-medium text-sm transition-colors ${
         active
-          ? "text-stellar-400 border-b-2 border-stellar-400"
-          : "text-gray-400 hover:text-gray-300 border-b-2 border-transparent"
+          ? "text-info border-b-2 border-info"
+          : "text-muted hover:text-body border-b-2 border-transparent"
       }`}
     >
       {label}

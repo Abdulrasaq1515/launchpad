@@ -107,9 +107,9 @@ export function TransferForm({ senderAddress, tokenDecimals, onSuccess }: Transf
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="glass-card p-6 space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="panel p-6 space-y-6">
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Token Contract ID
         </label>
         <Input
@@ -118,12 +118,12 @@ export function TransferForm({ senderAddress, tokenDecimals, onSuccess }: Transf
           {...register("tokenContractId")}
         />
         {errors.tokenContractId && (
-          <p className="text-red-400 text-sm mt-1">{errors.tokenContractId.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.tokenContractId.message}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Recipient Address
         </label>
         <Input
@@ -132,7 +132,7 @@ export function TransferForm({ senderAddress, tokenDecimals, onSuccess }: Transf
           {...register("toAddress")}
         />
         {errors.toAddress && (
-          <p className="text-red-400 text-sm mt-1">{errors.toAddress.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.toAddress.message}</p>
         )}
       </div>
 

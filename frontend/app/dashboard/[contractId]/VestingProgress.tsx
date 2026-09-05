@@ -47,25 +47,25 @@ function Toast({
 }) {
   return (
     <div
-      className="fixed bottom-6 right-6 z-50 flex max-w-md items-start gap-3 rounded-lg border border-white/10 bg-void-900 p-4 shadow-2xl animate-slide-in-up"
+      className="fixed bottom-6 right-6 z-50 flex max-w-md items-start gap-3 rounded-lg border border-line bg-sunken p-4 animate-slide-in-up"
       role="alert"
     >
       {type === "success" ? (
-        <CheckCircle className="h-5 w-5 shrink-0 text-green-400" />
+        <CheckCircle className="h-5 w-5 shrink-0 text-ok" />
       ) : (
-        <XCircle className="h-5 w-5 shrink-0 text-red-400" />
+        <XCircle className="h-5 w-5 shrink-0 text-danger" />
       )}
       <div className="flex-1">
         <p
-          className={`text-sm font-medium ${type === "success" ? "text-green-400" : "text-red-400"}`}
+          className={`text-sm font-medium ${type === "success" ? "text-ok" : "text-danger"}`}
         >
           {type === "success" ? "Success" : "Error"}
         </p>
-        <p className="mt-1 text-sm text-gray-300">{message}</p>
+        <p className="mt-1 text-sm text-body">{message}</p>
       </div>
       <button
         onClick={onClose}
-        className="text-gray-400 transition-colors hover:text-white"
+        className="text-muted transition-colors hover:text-ink"
         aria-label="Close notification"
       >
         <XCircle className="h-4 w-4" />
@@ -208,44 +208,44 @@ function VestingDisplay({
         : "Vesting";
 
   const statusColor = schedule.revoked
-    ? "text-red-400"
+    ? "text-danger"
     : vestedBig >= totalBig
-      ? "text-green-400"
-      : "text-stellar-400";
+      ? "text-ok"
+      : "text-info";
 
   return (
     <div className="space-y-6">
       {/* Info cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="glass-card p-3">
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+        <div className="panel p-3">
+          <span className="text-xs font-medium text-muted">
             Status
           </span>
           <p className={`mt-1 text-sm font-semibold ${statusColor}`}>
             {statusLabel}
           </p>
         </div>
-        <div className="glass-card p-3">
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+        <div className="panel p-3">
+          <span className="text-xs font-medium text-muted">
             Unlock %
           </span>
-          <p className="mt-1 text-sm font-semibold text-white">
+          <p className="mt-1 text-sm font-semibold text-ink">
             {vestedPercent.toFixed(2)}%
           </p>
         </div>
-        <div className="glass-card p-3">
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+        <div className="panel p-3">
+          <span className="text-xs font-medium text-muted">
             Vested
           </span>
-          <p className="mt-1 text-sm font-semibold text-white">
+          <p className="mt-1 text-sm font-semibold text-ink">
             {formatTokenAmount(contractVestedAmount, decimals)}
           </p>
         </div>
-        <div className="glass-card p-3">
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+        <div className="panel p-3">
+          <span className="text-xs font-medium text-muted">
             Released
           </span>
-          <p className="mt-1 text-sm font-semibold text-white">
+          <p className="mt-1 text-sm font-semibold text-ink">
             {formatTokenAmount(schedule.released, decimals)}
           </p>
         </div>
@@ -254,17 +254,17 @@ function VestingDisplay({
       {/* Vested progress bar */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
             <Unlock className="h-3 w-3" /> Vested
           </span>
-          <span className="text-xs font-mono text-gray-500">
+          <span className="text-xs data text-muted">
             {formatTokenAmount(contractVestedAmount, decimals)} /{" "}
             {formatTokenAmount(schedule.totalAmount, decimals)}
           </span>
         </div>
-        <div className="h-3 w-full overflow-hidden rounded-full border border-white/5 bg-void-800">
+        <div className="h-3 w-full overflow-hidden rounded-full border border-line/5 bg-sunken">
           <div
-            className="h-full rounded-full bg-linear-to-r from-stellar-400 to-stellar-600 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(45,125,255,0.3)]"
+            className="h-full rounded-full bg-ink transition-all duration-700 ease-out shadow-[0_0_10px_rgba(45,125,255,0.3)]"
             style={{ width: `${Math.min(vestedPercent, 100)}%` }}
           />
         </div>
@@ -273,15 +273,15 @@ function VestingDisplay({
       {/* Released progress bar */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
             <Lock className="h-3 w-3" /> Released
           </span>
-          <span className="text-xs font-mono text-gray-500">
+          <span className="text-xs data text-muted">
             {formatTokenAmount(schedule.released, decimals)} /{" "}
             {formatTokenAmount(schedule.totalAmount, decimals)}
           </span>
         </div>
-        <div className="h-3 w-full overflow-hidden rounded-full border border-white/5 bg-void-800">
+        <div className="h-3 w-full overflow-hidden rounded-full border border-line/5 bg-sunken">
           <div
             className="h-full rounded-full bg-linear-to-r from-green-500 to-green-400 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(34,197,94,0.3)]"
             style={{ width: `${Math.min(releasedPercent, 100)}%` }}
@@ -291,17 +291,17 @@ function VestingDisplay({
 
       {/* Timeline */}
       <div>
-        <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-gray-400">
+        <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted">
           <Clock className="h-3 w-3" /> Timeline
         </p>
 
         <div className="relative pb-8 pt-8">
           {/* Background track */}
-          <div className="h-1.5 w-full rounded-full border border-white/5 bg-void-800" />
+          <div className="h-1.5 w-full rounded-full border border-line/5 bg-sunken" />
 
           {/* Filled portion — position is an estimate for animation only */}
           <div
-            className="absolute left-0 top-8 h-1.5 rounded-full bg-linear-to-r from-stellar-500 to-stellar-400"
+            className="absolute left-0 top-8 h-1.5 rounded-full bg-ink"
             style={{ width: `${timelinePos}%` }}
           />
 
@@ -316,18 +316,18 @@ function VestingDisplay({
                   transform: "translateX(-50%)",
                 }}
               >
-                <span className="whitespace-nowrap text-[10px] font-mono text-stellar-300">
+                <span className="whitespace-nowrap text-[10px] data text-info">
                   L{currentLedger.toLocaleString()}
                 </span>
-                <div className="mt-0.5 h-3 w-0.5 bg-stellar-400" />
-                <div className="h-3 w-3 rounded-full border-2 border-stellar-400 bg-void-900 shadow-[0_0_8px_rgba(45,125,255,0.5)]" />
+                <div className="mt-0.5 h-3 w-0.5 bg-info" />
+                <div className="h-3 w-3 rounded-full border-2 border-info bg-sunken shadow-[0_0_8px_rgba(45,125,255,0.5)]" />
               </div>
             )}
 
           {/* Cliff label */}
           <div className="absolute left-0 top-12 flex flex-col items-start">
             <div className="h-2 w-0.5 bg-gray-600" />
-            <span className="mt-0.5 text-[10px] font-mono text-gray-500">
+            <span className="mt-0.5 text-[10px] data text-muted">
               Cliff: L{schedule.cliffLedger.toLocaleString()}
             </span>
           </div>
@@ -335,7 +335,7 @@ function VestingDisplay({
           {/* End label */}
           <div className="absolute right-0 top-12 flex flex-col items-end">
             <div className="ml-auto h-2 w-0.5 bg-gray-600" />
-            <span className="mt-0.5 text-[10px] font-mono text-gray-500">
+            <span className="mt-0.5 text-[10px] data text-muted">
               End: L{schedule.endLedger.toLocaleString()}
             </span>
           </div>
@@ -343,7 +343,7 @@ function VestingDisplay({
       </div>
 
       {/* Recipient */}
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 text-xs text-muted">
         <span>Recipient:</span>
         <ExplorerLink
           type="account"
@@ -352,23 +352,23 @@ function VestingDisplay({
           truncateChars={6}
           showCopy={true}
         />
-        {schedule.revoked && <span className="text-red-400">(Revoked)</span>}
+        {schedule.revoked && <span className="text-danger">(Revoked)</span>}
       </div>
 
       {/* Admin Actions */}
       {!schedule.revoked && (
-        <div className="mt-6 border-t border-white/5 pt-6">
+        <div className="mt-6 border-t border-line/5 pt-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-300">Admin Actions</p>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="text-sm font-medium text-body">Admin Actions</p>
+              <p className="mt-1 text-xs text-muted">
                 Revoke this schedule to reclaim unvested tokens
               </p>
             </div>
             {!connected ? (
               <button
                 onClick={connect}
-                className="rounded-lg border border-stellar-500/30 bg-stellar-500/10 px-4 py-2 text-sm font-medium text-stellar-300 transition-colors hover:bg-stellar-500/20"
+                className="rounded-lg border border-info/30 bg-info-soft px-4 py-2 text-sm font-medium text-info transition-colors hover:bg-info-soft"
               >
                 Connect Wallet
               </button>
@@ -376,14 +376,14 @@ function VestingDisplay({
               <button
                 onClick={() => setShowConfirmDialog(true)}
                 disabled={isRevoking}
-                className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-lg border border-danger/30 bg-danger-soft px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger-soft disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isRevoking ? "Revoking..." : "Revoke Schedule"}
               </button>
             )}
           </div>
           {connected && (
-            <p className="mt-2 text-xs text-gray-600">
+            <p className="mt-2 text-xs text-faint">
               Connected: {truncateAddress(publicKey || "", 4)}
             </p>
           )}
@@ -473,9 +473,9 @@ export default function VestingProgress({ decimals }: { decimals: number }) {
   return (
     <div className="space-y-4">
       {/* Lookup form */}
-      <div className="glass-card space-y-3 p-4">
+      <div className="panel space-y-3 p-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-400">
+          <label className="mb-1 block text-xs font-medium text-muted">
             Vesting Contract ID
           </label>
           <input
@@ -483,11 +483,11 @@ export default function VestingProgress({ decimals }: { decimals: number }) {
             value={vestingContract}
             onChange={(e) => setVestingContract(e.target.value)}
             placeholder="C… or G…"
-            className="w-full rounded-lg border border-white/10 bg-void-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-stellar-500 focus:ring-1 focus:ring-stellar-500"
+            className="w-full rounded-lg border border-line bg-sunken px-3 py-2 text-sm text-ink placeholder-faint outline-none focus:border-info focus:ring-1 focus:ring-info"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-400">
+          <label className="mb-1 block text-xs font-medium text-muted">
             Recipient Address
           </label>
           <input
@@ -495,7 +495,7 @@ export default function VestingProgress({ decimals }: { decimals: number }) {
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
             placeholder="G…"
-            className="w-full rounded-lg border border-white/10 bg-void-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-stellar-500 focus:ring-1 focus:ring-stellar-500"
+            className="w-full rounded-lg border border-line bg-sunken px-3 py-2 text-sm text-ink placeholder-faint outline-none focus:border-info focus:ring-1 focus:ring-info"
           />
         </div>
         <button
@@ -515,7 +515,7 @@ export default function VestingProgress({ decimals }: { decimals: number }) {
 
       {/* Error */}
       {error && (
-        <div className="glass-card flex items-start gap-3 p-4 text-sm text-red-400">
+        <div className="panel flex items-start gap-3 p-4 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -527,7 +527,7 @@ export default function VestingProgress({ decimals }: { decimals: number }) {
 
       {/* Result */}
       {schedule && (
-        <div className="glass-card p-4">
+        <div className="panel p-4">
           <VestingDisplay
             schedule={schedule}
             contractVestedAmount={contractVestedAmount}

@@ -18,7 +18,7 @@ declare global {
 export const lobstrAdapter: WalletAdapter = {
   id: "lobstr",
   name: "LOBSTR",
-  icon: "🦞",
+  icon: "LO",
 
   async isAvailable(): Promise<boolean> {
     return typeof window !== "undefined" && typeof window.lobstrWallet !== "undefined";

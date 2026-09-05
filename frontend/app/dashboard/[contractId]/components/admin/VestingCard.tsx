@@ -48,14 +48,14 @@ export function VestingCard({
         <Input
           label="Vesting Contract"
           placeholder="C..."
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("vestingContract")}
           error={form.formState.errors.vestingContract?.message}
         />
         <Input
           label="Recipient Address"
           placeholder="G..."
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("recipient")}
           error={form.formState.errors.recipient?.message}
         />
@@ -64,7 +64,7 @@ export function VestingCard({
             label="Cliff (Days)"
             type="number"
             placeholder="0"
-            className="bg-white/5 border-white/10"
+            className="bg-sunken border-line"
             {...form.register("cliffDays")}
             error={form.formState.errors.cliffDays?.message}
           />
@@ -72,7 +72,7 @@ export function VestingCard({
             label="Duration (Days)"
             type="number"
             placeholder="365"
-            className="bg-white/5 border-white/10"
+            className="bg-sunken border-line"
             {...form.register("durationDays")}
             error={form.formState.errors.durationDays?.message}
           />
@@ -87,7 +87,7 @@ export function VestingCard({
           label="Total Amount"
           type="number"
           placeholder="0.00"
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("amount")}
           error={form.formState.errors.amount?.message}
         />
@@ -105,7 +105,7 @@ export function VestingCard({
         )}
         <Button
           type="submit"
-          className="w-full mt-4 bg-stellar-500 hover:bg-stellar-600 text-white shadow-lg shadow-stellar-500/20"
+          className="w-full mt-4 bg-info hover:bg-info text-ink"
           isLoading={admin.loading === "vesting"}
           disabled={disabled}
         >
