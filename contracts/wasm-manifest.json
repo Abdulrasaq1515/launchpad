@@ -3,14 +3,18 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "34257ec9ed4ee7b8d853870482e3983c79297d710fc16ade90f8c12f9381d79b",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 27736,
+        "networks": {
+          "testnet": "34257ec9ed4ee7b8d853870482e3983c79297d710fc16ade90f8c12f9381d79b"
+        }
       }
     },
     "build_info": {
-      "sdk_version": "21.0.0",
-      "rust_version": "stable",
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
       "profile": "release"
     }
   },
@@ -18,14 +22,37 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "cbaa3e10b8b0ad090c2279734e26df352f10e66da676c985f024fdbaf7d50bb7",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 23155,
+        "networks": {
+          "testnet": "cbaa3e10b8b0ad090c2279734e26df352f10e66da676c985f024fdbaf7d50bb7"
+        }
       }
     },
     "build_info": {
-      "sdk_version": "21.0.0",
-      "rust_version": "stable",
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
+      "profile": "release"
+    }
+  },
+  "factory": {
+    "latest": "v1.0.0",
+    "versions": {
+      "v1.0.0": {
+        "wasm_hash": "6a844bebd74531d94d270bd834b755feb53916ca0a593f47be5fa2b576ad9c4b",
+        "source_tag": "v1.0.0",
+        "wasm_bytes": 7169,
+        "networks": {
+          "testnet": "6a844bebd74531d94d270bd834b755feb53916ca0a593f47be5fa2b576ad9c4b"
+        }
+      }
+    },
+    "build_info": {
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
       "profile": "release"
     }
   },
@@ -33,14 +60,18 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "126cf8e1a2ffe99c4a1cd996fd02b823f5c833d58705bd573e508ac5ce79ef07",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 9773,
+        "networks": {
+          "testnet": "126cf8e1a2ffe99c4a1cd996fd02b823f5c833d58705bd573e508ac5ce79ef07"
+        }
       }
     },
     "build_info": {
-      "sdk_version": "21.0.0",
-      "rust_version": "stable",
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
       "profile": "release"
     }
   }

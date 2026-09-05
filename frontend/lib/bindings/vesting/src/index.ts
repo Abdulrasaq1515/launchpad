@@ -33,6 +33,15 @@ if (typeof window !== "undefined") {
 
 
 
+export type DataKey = {tag: "Admin", values: void} | {tag: "PendingAdmin", values: void} | {tag: "Locked", values: void} | {tag: "TokenContract", values: void} | {tag: "IsPaused", values: void} | {tag: "TotalCommitted", values: void} | {tag: "Schedule", values: readonly [string, u32]} | {tag: "ScheduleCount", values: readonly [string]} | {tag: "RecipientCount", values: void} | {tag: "RecipientAt", values: readonly [u32]};
+
+
+export interface Solvency {
+  solvent: boolean;
+  token_balance: i128;
+  total_committed: i128;
+}
+
 /**
  * Typed contract errors for the vesting contract.
  */
@@ -104,19 +113,27 @@ export const VestingError = {
   /**
    * `prune_recipient` called for a recipient that is not tracked.
    */
-  17: {message:"RecipientNotTracked"}
-}
-
-export type DataKey = {tag: "Admin", values: void} | {tag: "PendingAdmin", values: void} | {tag: "Locked", values: void} | {tag: "TokenContract", values: void} | {tag: "IsPaused", values: void} | {tag: "TotalCommitted", values: void} | {tag: "Schedule", values: readonly [string, u32]} | {tag: "ScheduleCount", values: readonly [string]} | {tag: "RecipientCount", values: void} | {tag: "RecipientAt", values: readonly [u32]};
-
-
-export interface VestingSchedule {
-  cliff_ledger: u32;
-  end_ledger: u32;
-  recipient: string;
-  released: i128;
-  revoked: boolean;
-  total_amount: i128;
+  17: {message:"RecipientNotTracked"},
+  /**
+   * `cliff_ledger` is earlier than the current ledger.
+   */
+  18: {message:"CliffInPast"},
+  /**
+   * `total_amount` exceeds `MAX_VESTING_AMOUNT`.
+   */
+  19: {message:"ExceedsVestingLimit"},
+  /**
+   * The contract's token balance does not cover its committed schedules.
+   */
+  20: {message:"Underfunded"},
+  /**
+   * WASM hash supplied to `upgrade` is the all-zeros sentinel.
+   */
+  21: {message:"InvalidWasmHash"},
+  /**
+   * The contract is permanently locked (`revoke_admin` was called).
+   */
+  22: {message:"Locked"}
 }
 
 
@@ -128,64 +145,28 @@ export interface ScheduleInput {
 }
 
 
-export interface Solvency {
-  solvent: boolean;
-  token_balance: i128;
-  total_committed: i128;
+export interface VestingSchedule {
+  cliff_ledger: u32;
+  end_ledger: u32;
+  recipient: string;
+  released: i128;
+  revoked: boolean;
+  total_amount: i128;
 }
 
 export interface Client {
   /**
-   * Construct and simulate a initialize transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Set the admin and the token contract this vesting module manages.
+   * Construct and simulate a pause transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Pause the vesting contract. Admin only.
    */
-  initialize: ({admin, token_contract}: {admin: string, token_contract: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  pause: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a propose_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Propose a new admin. Must be called by the current admin.
-   * The new admin must call `accept_admin` to finalize the transfer.
+   * Construct and simulate a revoke transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Admin-only: revoke a schedule, send vested portion to recipient,
+   * return unvested remainder to admin.
    */
-  propose_admin: ({new_admin}: {new_admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a accept_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Accept the admin role. Must be called by the pending admin.
-   */
-  accept_admin: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a cancel_admin_proposal transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Cancel a proposed admin transfer. Must be called by the current admin.
-   */
-  cancel_admin_proposal: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a create_schedule transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Create a cliff + linear vesting schedule for `recipient`.
-   * 
-   * `cliff_ledger` — ledger number when tokens start unlocking.
-   * `end_ledger`   — ledger number when 100 % is vested.
-   * 
-   * This function atomically transfers `total_amount` tokens from the admin
-   * to this contract's address using transfer, ensuring the contract
-   * is properly funded in the same transaction.
-   */
-  create_schedule: ({recipient, total_amount, cliff_ledger, end_ledger}: {recipient: string, total_amount: i128, cliff_ledger: u32, end_ledger: u32}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a create_schedules_batch transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Create multiple vesting schedules in a single transaction.
-   * 
-   * Atomically transfers the sum of all `total_amount` values from the admin
-   * to this contract (Phase 2), then writes each schedule (Phase 3). If any
-   * step panics the entire transaction rolls back, including the token transfer.
-   * 
-   * **Maximum batch size: 50 recipients.** Larger batches risk exceeding
-   * Soroban's per-transaction compute budget and will be rejected up front
-   * with a clear error rather than an opaque resource failure.
-   */
-  create_schedules_batch: ({schedules}: {schedules: Array<ScheduleInput>}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+  revoke: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a release transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -193,6 +174,52 @@ export interface Client {
    * Can be called by anyone.
    */
   release: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a unpause transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Unpause the vesting contract. Admin only.
+   */
+  unpause: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a upgrade transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Upgrade this contract's WASM code hash in place. Admin only.
+   * 
+   * Security note: this preserves existing storage and contract state, so
+   * new WASM must remain storage-compatible with previous deployments.
+   */
+  upgrade: ({new_wasm_hash}: {new_wasm_hash: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a solvency transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Compare the vesting contract's live token balance to outstanding grants.
+   */
+  solvency: (options?: MethodOptions) => Promise<AssembledTransaction<Solvency>>
+
+  /**
+   * Construct and simulate a get_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Returns the admin address of this vesting contract.
+   */
+  get_admin: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
+   * Construct and simulate a is_locked transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Returns `true` once `revoke_admin` has been called. Once locked, no
+   * admin operation can ever succeed again.
+   */
+  is_locked: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a is_paused transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Returns `true` if the contract is currently paused.
+   */
+  is_paused: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
+
+  /**
+   * Construct and simulate a initialize transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Set the admin and the token contract this vesting module manages.
+   */
+  initialize: ({admin, token_contract}: {admin: string, token_contract: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a keep_alive transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -207,11 +234,17 @@ export interface Client {
   keep_alive: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a revoke transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Admin-only: revoke a schedule, send vested portion to recipient,
-   * return unvested remainder to admin.
+   * Construct and simulate a release_all transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Release all releasable tokens across all non-revoked schedules
+   * in a single token transfer.
    */
-  revoke: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  release_all: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a accept_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Accept the admin role. Must be called by the pending admin.
+   */
+  accept_admin: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a extend_cliff transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -230,55 +263,10 @@ export interface Client {
   extend_cliff: ({recipient, new_cliff, index}: {recipient: string, new_cliff: u32, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a vested_amount transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Total amount vested so far (may or may not have been released).
+   * Construct and simulate a get_schedule transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Return the full schedule struct for a recipient.
    */
-  vested_amount: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a released_amount transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Amount already released to the recipient.
-   */
-  released_amount: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a total_committed transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Total tokens still committed to active vesting schedules.
-   */
-  total_committed: (options?: MethodOptions) => Promise<AssembledTransaction<i128>>
-
-  /**
-   * Construct and simulate a solvency transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Compare the vesting contract's live token balance to outstanding grants.
-   */
-  solvency: (options?: MethodOptions) => Promise<AssembledTransaction<Solvency>>
-
-  /**
-   * Construct and simulate a is_paused transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Returns `true` if the contract is currently paused.
-   */
-  is_paused: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
-
-  /**
-   * Construct and simulate a pause transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Pause the vesting contract. Admin only.
-   */
-  pause: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a unpause transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Unpause the vesting contract. Admin only.
-   */
-  unpause: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
-
-  /**
-   * Construct and simulate a upgrade transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Upgrade this contract's WASM code hash in place. Admin only.
-   * 
-   * Security note: this preserves existing storage and contract state, so
-   * new WASM must remain storage-compatible with previous deployments.
-   */
-  upgrade: ({new_wasm_hash}: {new_wasm_hash: Buffer}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  get_schedule: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<VestingSchedule>>
 
   /**
    * Construct and simulate a revoke_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -299,29 +287,10 @@ export interface Client {
   revoke_admin: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a is_locked transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Returns `true` once `revoke_admin` has been called. Once locked, no
-   * admin operation can ever succeed again.
+   * Construct and simulate a total_vested transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Sum vested amount across all non-revoked schedules for a recipient.
    */
-  is_locked: (options?: MethodOptions) => Promise<AssembledTransaction<boolean>>
-
-  /**
-   * Construct and simulate a get_schedule_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Return the number of schedules stored for a recipient.
-   */
-  get_schedule_count: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
-
-  /**
-   * Construct and simulate a get_schedule transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Return the full schedule struct for a recipient.
-   */
-  get_schedule: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<VestingSchedule>>
-
-  /**
-   * Construct and simulate a get_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Returns the admin address of this vesting contract.
-   */
-  get_admin: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+  total_vested: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
    * Construct and simulate a pending_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -331,28 +300,36 @@ export interface Client {
   pending_admin: (options?: MethodOptions) => Promise<AssembledTransaction<Option<string>>>
 
   /**
-   * Construct and simulate a get_token_contract transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Returns the token contract address managed by this vesting contract.
+   * Construct and simulate a propose_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Propose a new admin. Must be called by the current admin.
+   * The new admin must call `accept_admin` to finalize the transfer.
    */
-  get_token_contract: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+  propose_admin: ({new_admin}: {new_admin: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a get_recipient_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Return the number of recipients tracked (including any pruned slots).
+   * Construct and simulate a vested_amount transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Total amount vested so far (may or may not have been released).
    */
-  get_recipient_count: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+  vested_amount: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
-   * Construct and simulate a get_recipients_paginated transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Return paginated list of recipients with vesting schedules.
-   * 
-   * `start` — zero-based offset into the recipients list.
-   * `limit` — maximum number of recipients to return.
-   * 
-   * Pruned slots (see `prune_recipient`) are omitted from the result, so
-   * a page may contain fewer than `limit` entries even if more remain.
+   * Construct and simulate a total_released transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Sum released amount across all schedules for a recipient.
    */
-  get_recipients_paginated: ({start, limit}: {start: u32, limit: u32}, options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
+  total_released: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+
+  /**
+   * Construct and simulate a create_schedule transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Create a cliff + linear vesting schedule for `recipient`.
+   * 
+   * `cliff_ledger` — ledger number when tokens start unlocking.
+   * `end_ledger`   — ledger number when 100 % is vested.
+   * 
+   * This function atomically transfers `total_amount` tokens from the admin
+   * to this contract's address using transfer, ensuring the contract
+   * is properly funded in the same transaction.
+   */
+  create_schedule: ({recipient, total_amount, cliff_ledger, end_ledger}: {recipient: string, total_amount: i128, cliff_ledger: u32, end_ledger: u32}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a prune_recipient transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -363,16 +340,16 @@ export interface Client {
   prune_recipient: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
-   * Construct and simulate a total_vested transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Sum vested amount across all non-revoked schedules for a recipient.
+   * Construct and simulate a released_amount transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Amount already released to the recipient.
    */
-  total_vested: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+  released_amount: ({recipient, index}: {recipient: string, index: Option<u32>}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
-   * Construct and simulate a total_released transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Sum released amount across all schedules for a recipient.
+   * Construct and simulate a total_committed transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Total tokens still committed to active vesting schedules.
    */
-  total_released: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
+  total_committed: (options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
   /**
    * Construct and simulate a total_releasable transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
@@ -387,11 +364,54 @@ export interface Client {
   get_all_schedules: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<Array<VestingSchedule>>>
 
   /**
-   * Construct and simulate a release_all transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
-   * Release all releasable tokens across all non-revoked schedules
-   * in a single token transfer.
+   * Construct and simulate a get_schedule_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Return the number of schedules stored for a recipient.
    */
-  release_all: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  get_schedule_count: ({recipient}: {recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+
+  /**
+   * Construct and simulate a get_token_contract transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Returns the token contract address managed by this vesting contract.
+   */
+  get_token_contract: (options?: MethodOptions) => Promise<AssembledTransaction<string>>
+
+  /**
+   * Construct and simulate a get_recipient_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Return the number of recipients tracked (including any pruned slots).
+   */
+  get_recipient_count: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+
+  /**
+   * Construct and simulate a cancel_admin_proposal transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Cancel a proposed admin transfer. Must be called by the current admin.
+   */
+  cancel_admin_proposal: (options?: MethodOptions) => Promise<AssembledTransaction<null>>
+
+  /**
+   * Construct and simulate a create_schedules_batch transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Create multiple vesting schedules in a single transaction.
+   * 
+   * Atomically transfers the sum of all `total_amount` values from the admin
+   * to this contract (Phase 2), then writes each schedule (Phase 3). If any
+   * step panics the entire transaction rolls back, including the token transfer.
+   * 
+   * **Maximum batch size: 50 recipients.** Larger batches risk exceeding
+   * Soroban's per-transaction compute budget and will be rejected up front
+   * with a clear error rather than an opaque resource failure.
+   */
+  create_schedules_batch: ({schedules}: {schedules: Array<ScheduleInput>}, options?: MethodOptions) => Promise<AssembledTransaction<u32>>
+
+  /**
+   * Construct and simulate a get_recipients_paginated transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Return paginated list of recipients with vesting schedules.
+   * 
+   * `start` — zero-based offset into the recipients list.
+   * `limit` — maximum number of recipients to return.
+   * 
+   * Pruned slots (see `prune_recipient`) are omitted from the result, so
+   * a page may contain fewer than `limit` entries even if more remain.
+   */
+  get_recipients_paginated: ({start, limit}: {start: u32, limit: u32}, options?: MethodOptions) => Promise<AssembledTransaction<Array<string>>>
 
 }
 export class Client extends ContractClient {
@@ -411,80 +431,80 @@ export class Client extends ContractClient {
   }
   constructor(public readonly options: ContractClientOptions) {
     super(
-      new ContractSpec([ "AAAABAAAAC9UeXBlZCBjb250cmFjdCBlcnJvcnMgZm9yIHRoZSB2ZXN0aW5nIGNvbnRyYWN0LgAAAAAAAAAADFZlc3RpbmdFcnJvcgAAABEAAABCYGluaXRpYWxpemVgIHdhcyBjYWxsZWQgb24gYSBjb250cmFjdCB0aGF0IGlzIGFscmVhZHkgaW5pdGlhbGl6ZWQuAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAM09wZXJhdGlvbiBhdHRlbXB0ZWQgYmVmb3JlIGBpbml0aWFsaXplYCB3YXMgY2FsbGVkLgAAAAAOTm90SW5pdGlhbGl6ZWQAAAAAAAIAAAAfVGhlIHZlc3RpbmcgY29udHJhY3QgaXMgcGF1c2VkLgAAAAAGUGF1c2VkAAAAAAADAAAAPkFtb3VudCBpcyB6ZXJvIG9yIG5lZ2F0aXZlIHdoZXJlIGEgcG9zaXRpdmUgdmFsdWUgaXMgcmVxdWlyZWQuAAAAAAANSW52YWxpZEFtb3VudAAAAAAAAAQAAAAyYGVuZF9sZWRnZXJgIGlzIG5vdCBzdHJpY3RseSBhZnRlciBgY2xpZmZfbGVkZ2VyYC4AAAAAABJJbnZhbGlkTGVkZ2VyUmFuZ2UAAAAAAAUAAAAzYGFjY2VwdF9hZG1pbmAgd2FzIGNhbGxlZCB3aXRoIG5vIHBlbmRpbmcgcHJvcG9zYWwuAAAAAA5Ob1BlbmRpbmdBZG1pbgAAAAAABgAAADJPcGVyYXRpb24gYXR0ZW1wdGVkIG9uIGEgcmV2b2tlZCB2ZXN0aW5nIHNjaGVkdWxlLgAAAAAAD1NjaGVkdWxlUmV2b2tlZAAAAAAHAAAAIlNjaGVkdWxlIGhhcyBhbHJlYWR5IGJlZW4gcmV2b2tlZC4AAAAAAA5BbHJlYWR5UmV2b2tlZAAAAAAACAAAADhgcmVsZWFzZWAgd2FzIGNhbGxlZCBidXQgbm8gdmVzdGVkIHRva2VucyBhcmUgYXZhaWxhYmxlLgAAABBOb3RoaW5nVG9SZWxlYXNlAAAACQAAACBObyBzY2hlZHVsZSBmb3VuZCBmb3IgcmVjaXBpZW50LgAAABBTY2hlZHVsZU5vdEZvdW5kAAAACgAAAC5TY2hlZHVsZSBpbmRleCBpcyBvdXQgb2YgYm91bmRzIGZvciByZWNpcGllbnQuAAAAAAAYU2NoZWR1bGVJbmRleE91dE9mQm91bmRzAAAACwAAAB5CYXRjaCBzY2hlZHVsZXMgbGlzdCBpcyBlbXB0eS4AAAAAAApCYXRjaEVtcHR5AAAAAAAMAAAAK0JhdGNoIHNjaGVkdWxlcyBzaXplIGV4Y2VlZHMgbWF4aW11bSBvZiA1MC4AAAAADUJhdGNoVG9vTGFyZ2UAAAAAAAANAAAAOGBleHRlbmRfY2xpZmZgIGNhbGxlZCBhZnRlciB0aGUgY2xpZmYgbGVkZ2VyIGhhcyBwYXNzZWQuAAAAC0NsaWZmUGFzc2VkAAAAAA4AAABFTmV3IGNsaWZmIGxlZGdlciBpcyBub3Qgc3RyaWN0bHkgbGF0ZXIgdGhhbiB0aGUgY3VycmVudCBjbGlmZiBsZWRnZXIuAAAAAAAAEENsaWZmTm90RXh0ZW5kZWQAAAAPAAAAN05ldyBjbGlmZiBsZWRnZXIgaXMgbm90IHN0cmljdGx5IGJlZm9yZSB0aGUgZW5kIGxlZGdlci4AAAAADUNsaWZmQWZ0ZXJFbmQAAAAAAAAQAAAAPWBwcnVuZV9yZWNpcGllbnRgIGNhbGxlZCBmb3IgYSByZWNpcGllbnQgdGhhdCBpcyBub3QgdHJhY2tlZC4AAAAAAAATUmVjaXBpZW50Tm90VHJhY2tlZAAAAAAR",
-        "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACgAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAAAAAAAAMUGVuZGluZ0FkbWluAAAAAAAAAAAAAAAGTG9ja2VkAAAAAAAAAAAAAAAAAA1Ub2tlbkNvbnRyYWN0AAAAAAAAAAAAAAAAAAAISXNQYXVzZWQAAAAAAAAAAAAAAA5Ub3RhbENvbW1pdHRlZAAAAAAAAQAAAAAAAAAIU2NoZWR1bGUAAAACAAAAEwAAAAQAAAABAAAAAAAAAA1TY2hlZHVsZUNvdW50AAAAAAAAAQAAABMAAAAAAAAAAAAAAA5SZWNpcGllbnRDb3VudAAAAAAAAQAAAAAAAAALUmVjaXBpZW50QXQAAAAAAQAAAAQ=",
-        "AAAAAQAAAAAAAAAAAAAAD1Zlc3RpbmdTY2hlZHVsZQAAAAAGAAAAAAAAAAxjbGlmZl9sZWRnZXIAAAAEAAAAAAAAAAplbmRfbGVkZ2VyAAAAAAAEAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAhyZWxlYXNlZAAAAAsAAAAAAAAAB3Jldm9rZWQAAAAAAQAAAAAAAAAMdG90YWxfYW1vdW50AAAACw==",
-        "AAAAAQAAAAAAAAAAAAAADVNjaGVkdWxlSW5wdXQAAAAAAAAEAAAAAAAAAAxjbGlmZl9sZWRnZXIAAAAEAAAAAAAAAAplbmRfbGVkZ2VyAAAAAAAEAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAx0b3RhbF9hbW91bnQAAAAL",
+      new ContractSpec([ "AAAAAgAAAAAAAAAAAAAAB0RhdGFLZXkAAAAACgAAAAAAAAAAAAAABUFkbWluAAAAAAAAAAAAAAAAAAAMUGVuZGluZ0FkbWluAAAAAAAAAAAAAAAGTG9ja2VkAAAAAAAAAAAAAAAAAA1Ub2tlbkNvbnRyYWN0AAAAAAAAAAAAAAAAAAAISXNQYXVzZWQAAAAAAAAAAAAAAA5Ub3RhbENvbW1pdHRlZAAAAAAAAQAAAAAAAAAIU2NoZWR1bGUAAAACAAAAEwAAAAQAAAABAAAAAAAAAA1TY2hlZHVsZUNvdW50AAAAAAAAAQAAABMAAAAAAAAAAAAAAA5SZWNpcGllbnRDb3VudAAAAAAAAQAAAAAAAAALUmVjaXBpZW50QXQAAAAAAQAAAAQ=",
         "AAAAAQAAAAAAAAAAAAAACFNvbHZlbmN5AAAAAwAAAAAAAAAHc29sdmVudAAAAAABAAAAAAAAAA10b2tlbl9iYWxhbmNlAAAAAAAACwAAAAAAAAAPdG90YWxfY29tbWl0dGVkAAAAAAs=",
-        "AAAAAAAAAEFTZXQgdGhlIGFkbWluIGFuZCB0aGUgdG9rZW4gY29udHJhY3QgdGhpcyB2ZXN0aW5nIG1vZHVsZSBtYW5hZ2VzLgAAAAAAAAppbml0aWFsaXplAAAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAADnRva2VuX2NvbnRyYWN0AAAAAAATAAAAAA==",
-        "AAAAAAAAAHpQcm9wb3NlIGEgbmV3IGFkbWluLiBNdXN0IGJlIGNhbGxlZCBieSB0aGUgY3VycmVudCBhZG1pbi4KVGhlIG5ldyBhZG1pbiBtdXN0IGNhbGwgYGFjY2VwdF9hZG1pbmAgdG8gZmluYWxpemUgdGhlIHRyYW5zZmVyLgAAAAAADXByb3Bvc2VfYWRtaW4AAAAAAAABAAAAAAAAAAluZXdfYWRtaW4AAAAAAAATAAAAAA==",
-        "AAAAAAAAADtBY2NlcHQgdGhlIGFkbWluIHJvbGUuIE11c3QgYmUgY2FsbGVkIGJ5IHRoZSBwZW5kaW5nIGFkbWluLgAAAAAMYWNjZXB0X2FkbWluAAAAAAAAAAA=",
-        "AAAAAAAAAEZDYW5jZWwgYSBwcm9wb3NlZCBhZG1pbiB0cmFuc2Zlci4gTXVzdCBiZSBjYWxsZWQgYnkgdGhlIGN1cnJlbnQgYWRtaW4uAAAAAAAVY2FuY2VsX2FkbWluX3Byb3Bvc2FsAAAAAAAAAAAAAAA=",
-        "AAAAAAAAAWVDcmVhdGUgYSBjbGlmZiArIGxpbmVhciB2ZXN0aW5nIHNjaGVkdWxlIGZvciBgcmVjaXBpZW50YC4KCmBjbGlmZl9sZWRnZXJgIOKAlCBsZWRnZXIgbnVtYmVyIHdoZW4gdG9rZW5zIHN0YXJ0IHVubG9ja2luZy4KYGVuZF9sZWRnZXJgICAg4oCUIGxlZGdlciBudW1iZXIgd2hlbiAxMDAgJSBpcyB2ZXN0ZWQuCgpUaGlzIGZ1bmN0aW9uIGF0b21pY2FsbHkgdHJhbnNmZXJzIGB0b3RhbF9hbW91bnRgIHRva2VucyBmcm9tIHRoZSBhZG1pbgp0byB0aGlzIGNvbnRyYWN0J3MgYWRkcmVzcyB1c2luZyB0cmFuc2ZlciwgZW5zdXJpbmcgdGhlIGNvbnRyYWN0CmlzIHByb3Blcmx5IGZ1bmRlZCBpbiB0aGUgc2FtZSB0cmFuc2FjdGlvbi4AAAAAAAAPY3JlYXRlX3NjaGVkdWxlAAAAAAQAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAAAAAAADHRvdGFsX2Ftb3VudAAAAAsAAAAAAAAADGNsaWZmX2xlZGdlcgAAAAQAAAAAAAAACmVuZF9sZWRnZXIAAAAAAAQAAAAA",
-        "AAAAAAAAAeFDcmVhdGUgbXVsdGlwbGUgdmVzdGluZyBzY2hlZHVsZXMgaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uCgpBdG9taWNhbGx5IHRyYW5zZmVycyB0aGUgc3VtIG9mIGFsbCBgdG90YWxfYW1vdW50YCB2YWx1ZXMgZnJvbSB0aGUgYWRtaW4KdG8gdGhpcyBjb250cmFjdCAoUGhhc2UgMiksIHRoZW4gd3JpdGVzIGVhY2ggc2NoZWR1bGUgKFBoYXNlIDMpLiBJZiBhbnkKc3RlcCBwYW5pY3MgdGhlIGVudGlyZSB0cmFuc2FjdGlvbiByb2xscyBiYWNrLCBpbmNsdWRpbmcgdGhlIHRva2VuIHRyYW5zZmVyLgoKKipNYXhpbXVtIGJhdGNoIHNpemU6IDUwIHJlY2lwaWVudHMuKiogTGFyZ2VyIGJhdGNoZXMgcmlzayBleGNlZWRpbmcKU29yb2JhbidzIHBlci10cmFuc2FjdGlvbiBjb21wdXRlIGJ1ZGdldCBhbmQgd2lsbCBiZSByZWplY3RlZCB1cCBmcm9udAp3aXRoIGEgY2xlYXIgZXJyb3IgcmF0aGVyIHRoYW4gYW4gb3BhcXVlIHJlc291cmNlIGZhaWx1cmUuAAAAAAAAFmNyZWF0ZV9zY2hlZHVsZXNfYmF0Y2gAAAAAAAEAAAAAAAAACXNjaGVkdWxlcwAAAAAAA+oAAAfQAAAADVNjaGVkdWxlSW5wdXQAAAAAAAABAAAABA==",
-        "AAAAAAAAAF9SZWxlYXNlIGFsbCBjdXJyZW50bHkgdmVzdGVkIChidXQgdW5yZWxlYXNlZCkgdG9rZW5zIHRvIHRoZSByZWNpcGllbnQuCkNhbiBiZSBjYWxsZWQgYnkgYW55b25lLgAAAAAHcmVsZWFzZQAAAAACAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAVpbmRleAAAAAAAA+gAAAAEAAAAAA==",
-        "AAAAAAAAAXFSZWZyZXNoIGEgc2NoZWR1bGUncyBzdG9yYWdlIFRUTCB3aXRob3V0IHJlbGVhc2luZyB0b2tlbnMuCgpTY2hlZHVsZXMgd2hvc2UgcmVtYWluaW5nIGR1cmF0aW9uIGV4Y2VlZHMgdGhlIG5ldHdvcmsncyBtYXhpbXVtCmVudHJ5IFRUTCAocm91Z2hseSAxODAgZGF5cykgaGF2ZSB0aGVpciBzdG9yYWdlIFRUTCBjbGFtcGVkIGF0CmNyZWF0aW9uIHRpbWUgKHNlZSBgX3R0bF9sZWRnZXJzYCkuIEZvciBzdWNoIGxvbmctZGF0ZWQgZ3JhbnRzLApjYWxsIHRoaXMgYXQgbGVhc3Qgb25jZSBwZXIgVFRMIHdpbmRvdyB0byBrZWVwIHRoZSBlbnRyeSBmcm9tCmJlaW5nIGFyY2hpdmVkIGJldHdlZW4gY2xhaW1zLiBDYW4gYmUgY2FsbGVkIGJ5IGFueW9uZS4AAAAAAAAKa2VlcF9hbGl2ZQAAAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAA=",
-        "AAAAAAAAAGRBZG1pbi1vbmx5OiByZXZva2UgYSBzY2hlZHVsZSwgc2VuZCB2ZXN0ZWQgcG9ydGlvbiB0byByZWNpcGllbnQsCnJldHVybiB1bnZlc3RlZCByZW1haW5kZXIgdG8gYWRtaW4uAAAABnJldm9rZQAAAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAA=",
-        "AAAAAAAAAiBBZG1pbi1vbmx5OiBleHRlbmQgdGhlIGNsaWZmIGxlZGdlciBvZiBhbiBleGlzdGluZyAobm9uLXJldm9rZWQpIHNjaGVkdWxlLgoKQWxzbyBzaGlmdHMgYGVuZF9sZWRnZXJgIGJ5IHRoZSBzYW1lIGRlbHRhIHNvIHRoYXQgdGhlIHRvdGFsIHZlc3RpbmcKZHVyYXRpb24gaXMgcHJlc2VydmVkIOKAlCB0aGUgcGVyLWxlZGdlciB1bmxvY2sgcmF0ZSByZW1haW5zIHVuY2hhbmdlZC4KClJ1bGVzIGVuZm9yY2VkOgotIGBuZXdfY2xpZmZgIG11c3QgYmUgc3RyaWN0bHkgZ3JlYXRlciB0aGFuIHRoZSBjdXJyZW50IGBjbGlmZl9sZWRnZXJgCihleHRlbnNpb24gb25seSDigJQgcmVkdWN0aW9uIGlzIG5ldmVyIGFsbG93ZWQpLgotIFRoZSBjdXJyZW50IGxlZGdlciBtdXN0IHN0aWxsIGJlIGJlZm9yZSB0aGUgY2xpZmYgKG9uY2UgdGhlIGNsaWZmIGhhcwphbHJlYWR5IHBhc3NlZCB0aGVyZSBpcyBub3RoaW5nIGxlZnQgdG8gZGVsYXkpLgotIGBuZXdfY2xpZmZgIG11c3QgcmVtYWluIHN0cmljdGx5IGxlc3MgdGhhbiB0aGUgc2hpZnRlZCBgZW5kX2xlZGdlcmAuAAAADGV4dGVuZF9jbGlmZgAAAAMAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAAAAAAACW5ld19jbGlmZgAAAAAAAAQAAAAAAAAABWluZGV4AAAAAAAD6AAAAAQAAAAA",
-        "AAAAAAAAAD9Ub3RhbCBhbW91bnQgdmVzdGVkIHNvIGZhciAobWF5IG9yIG1heSBub3QgaGF2ZSBiZWVuIHJlbGVhc2VkKS4AAAAADXZlc3RlZF9hbW91bnQAAAAAAAACAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAVpbmRleAAAAAAAA+gAAAAEAAAAAQAAAAs=",
-        "AAAAAAAAAClBbW91bnQgYWxyZWFkeSByZWxlYXNlZCB0byB0aGUgcmVjaXBpZW50LgAAAAAAAA9yZWxlYXNlZF9hbW91bnQAAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAEAAAAL",
-        "AAAAAAAAADlUb3RhbCB0b2tlbnMgc3RpbGwgY29tbWl0dGVkIHRvIGFjdGl2ZSB2ZXN0aW5nIHNjaGVkdWxlcy4AAAAAAAAPdG90YWxfY29tbWl0dGVkAAAAAAAAAAABAAAACw==",
-        "AAAAAAAAAEhDb21wYXJlIHRoZSB2ZXN0aW5nIGNvbnRyYWN0J3MgbGl2ZSB0b2tlbiBiYWxhbmNlIHRvIG91dHN0YW5kaW5nIGdyYW50cy4AAAAIc29sdmVuY3kAAAAAAAAAAQAAB9AAAAAIU29sdmVuY3k=",
-        "AAAAAAAAADNSZXR1cm5zIGB0cnVlYCBpZiB0aGUgY29udHJhY3QgaXMgY3VycmVudGx5IHBhdXNlZC4AAAAACWlzX3BhdXNlZAAAAAAAAAAAAAABAAAAAQ==",
+        "AAAABAAAAC9UeXBlZCBjb250cmFjdCBlcnJvcnMgZm9yIHRoZSB2ZXN0aW5nIGNvbnRyYWN0LgAAAAAAAAAADFZlc3RpbmdFcnJvcgAAABYAAABCYGluaXRpYWxpemVgIHdhcyBjYWxsZWQgb24gYSBjb250cmFjdCB0aGF0IGlzIGFscmVhZHkgaW5pdGlhbGl6ZWQuAAAAAAASQWxyZWFkeUluaXRpYWxpemVkAAAAAAABAAAAM09wZXJhdGlvbiBhdHRlbXB0ZWQgYmVmb3JlIGBpbml0aWFsaXplYCB3YXMgY2FsbGVkLgAAAAAOTm90SW5pdGlhbGl6ZWQAAAAAAAIAAAAfVGhlIHZlc3RpbmcgY29udHJhY3QgaXMgcGF1c2VkLgAAAAAGUGF1c2VkAAAAAAADAAAAPkFtb3VudCBpcyB6ZXJvIG9yIG5lZ2F0aXZlIHdoZXJlIGEgcG9zaXRpdmUgdmFsdWUgaXMgcmVxdWlyZWQuAAAAAAANSW52YWxpZEFtb3VudAAAAAAAAAQAAAAyYGVuZF9sZWRnZXJgIGlzIG5vdCBzdHJpY3RseSBhZnRlciBgY2xpZmZfbGVkZ2VyYC4AAAAAABJJbnZhbGlkTGVkZ2VyUmFuZ2UAAAAAAAUAAAAzYGFjY2VwdF9hZG1pbmAgd2FzIGNhbGxlZCB3aXRoIG5vIHBlbmRpbmcgcHJvcG9zYWwuAAAAAA5Ob1BlbmRpbmdBZG1pbgAAAAAABgAAADJPcGVyYXRpb24gYXR0ZW1wdGVkIG9uIGEgcmV2b2tlZCB2ZXN0aW5nIHNjaGVkdWxlLgAAAAAAD1NjaGVkdWxlUmV2b2tlZAAAAAAHAAAAIlNjaGVkdWxlIGhhcyBhbHJlYWR5IGJlZW4gcmV2b2tlZC4AAAAAAA5BbHJlYWR5UmV2b2tlZAAAAAAACAAAADhgcmVsZWFzZWAgd2FzIGNhbGxlZCBidXQgbm8gdmVzdGVkIHRva2VucyBhcmUgYXZhaWxhYmxlLgAAABBOb3RoaW5nVG9SZWxlYXNlAAAACQAAACBObyBzY2hlZHVsZSBmb3VuZCBmb3IgcmVjaXBpZW50LgAAABBTY2hlZHVsZU5vdEZvdW5kAAAACgAAAC5TY2hlZHVsZSBpbmRleCBpcyBvdXQgb2YgYm91bmRzIGZvciByZWNpcGllbnQuAAAAAAAYU2NoZWR1bGVJbmRleE91dE9mQm91bmRzAAAACwAAAB5CYXRjaCBzY2hlZHVsZXMgbGlzdCBpcyBlbXB0eS4AAAAAAApCYXRjaEVtcHR5AAAAAAAMAAAAK0JhdGNoIHNjaGVkdWxlcyBzaXplIGV4Y2VlZHMgbWF4aW11bSBvZiA1MC4AAAAADUJhdGNoVG9vTGFyZ2UAAAAAAAANAAAAOGBleHRlbmRfY2xpZmZgIGNhbGxlZCBhZnRlciB0aGUgY2xpZmYgbGVkZ2VyIGhhcyBwYXNzZWQuAAAAC0NsaWZmUGFzc2VkAAAAAA4AAABFTmV3IGNsaWZmIGxlZGdlciBpcyBub3Qgc3RyaWN0bHkgbGF0ZXIgdGhhbiB0aGUgY3VycmVudCBjbGlmZiBsZWRnZXIuAAAAAAAAEENsaWZmTm90RXh0ZW5kZWQAAAAPAAAAN05ldyBjbGlmZiBsZWRnZXIgaXMgbm90IHN0cmljdGx5IGJlZm9yZSB0aGUgZW5kIGxlZGdlci4AAAAADUNsaWZmQWZ0ZXJFbmQAAAAAAAAQAAAAPWBwcnVuZV9yZWNpcGllbnRgIGNhbGxlZCBmb3IgYSByZWNpcGllbnQgdGhhdCBpcyBub3QgdHJhY2tlZC4AAAAAAAATUmVjaXBpZW50Tm90VHJhY2tlZAAAAAARAAAAMmBjbGlmZl9sZWRnZXJgIGlzIGVhcmxpZXIgdGhhbiB0aGUgY3VycmVudCBsZWRnZXIuAAAAAAALQ2xpZmZJblBhc3QAAAAAEgAAACxgdG90YWxfYW1vdW50YCBleGNlZWRzIGBNQVhfVkVTVElOR19BTU9VTlRgLgAAABNFeGNlZWRzVmVzdGluZ0xpbWl0AAAAABMAAABEVGhlIGNvbnRyYWN0J3MgdG9rZW4gYmFsYW5jZSBkb2VzIG5vdCBjb3ZlciBpdHMgY29tbWl0dGVkIHNjaGVkdWxlcy4AAAALVW5kZXJmdW5kZWQAAAAAFAAAADpXQVNNIGhhc2ggc3VwcGxpZWQgdG8gYHVwZ3JhZGVgIGlzIHRoZSBhbGwtemVyb3Mgc2VudGluZWwuAAAAAAAPSW52YWxpZFdhc21IYXNoAAAAABUAAAA/VGhlIGNvbnRyYWN0IGlzIHBlcm1hbmVudGx5IGxvY2tlZCAoYHJldm9rZV9hZG1pbmAgd2FzIGNhbGxlZCkuAAAAAAZMb2NrZWQAAAAAABY=",
+        "AAAAAQAAAAAAAAAAAAAADVNjaGVkdWxlSW5wdXQAAAAAAAAEAAAAAAAAAAxjbGlmZl9sZWRnZXIAAAAEAAAAAAAAAAplbmRfbGVkZ2VyAAAAAAAEAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAx0b3RhbF9hbW91bnQAAAAL",
+        "AAAAAQAAAAAAAAAAAAAAD1Zlc3RpbmdTY2hlZHVsZQAAAAAGAAAAAAAAAAxjbGlmZl9sZWRnZXIAAAAEAAAAAAAAAAplbmRfbGVkZ2VyAAAAAAAEAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAhyZWxlYXNlZAAAAAsAAAAAAAAAB3Jldm9rZWQAAAAAAQAAAAAAAAAMdG90YWxfYW1vdW50AAAACw==",
         "AAAAAAAAACdQYXVzZSB0aGUgdmVzdGluZyBjb250cmFjdC4gQWRtaW4gb25seS4AAAAABXBhdXNlAAAAAAAAAAAAAAA=",
+        "AAAAAAAAAGRBZG1pbi1vbmx5OiByZXZva2UgYSBzY2hlZHVsZSwgc2VuZCB2ZXN0ZWQgcG9ydGlvbiB0byByZWNpcGllbnQsCnJldHVybiB1bnZlc3RlZCByZW1haW5kZXIgdG8gYWRtaW4uAAAABnJldm9rZQAAAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAA=",
+        "AAAAAAAAAF9SZWxlYXNlIGFsbCBjdXJyZW50bHkgdmVzdGVkIChidXQgdW5yZWxlYXNlZCkgdG9rZW5zIHRvIHRoZSByZWNpcGllbnQuCkNhbiBiZSBjYWxsZWQgYnkgYW55b25lLgAAAAAHcmVsZWFzZQAAAAACAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAVpbmRleAAAAAAAA+gAAAAEAAAAAA==",
         "AAAAAAAAAClVbnBhdXNlIHRoZSB2ZXN0aW5nIGNvbnRyYWN0LiBBZG1pbiBvbmx5LgAAAAAAAAd1bnBhdXNlAAAAAAAAAAAA",
         "AAAAAAAAAMZVcGdyYWRlIHRoaXMgY29udHJhY3QncyBXQVNNIGNvZGUgaGFzaCBpbiBwbGFjZS4gQWRtaW4gb25seS4KClNlY3VyaXR5IG5vdGU6IHRoaXMgcHJlc2VydmVzIGV4aXN0aW5nIHN0b3JhZ2UgYW5kIGNvbnRyYWN0IHN0YXRlLCBzbwpuZXcgV0FTTSBtdXN0IHJlbWFpbiBzdG9yYWdlLWNvbXBhdGlibGUgd2l0aCBwcmV2aW91cyBkZXBsb3ltZW50cy4AAAAAAAd1cGdyYWRlAAAAAAEAAAAAAAAADW5ld193YXNtX2hhc2gAAAAAAAPuAAAAIAAAAAA=",
-        "AAAAAAAAAeBQZXJtYW5lbnRseSByZXZva2UgdGhlIGFkbWluIHJvbGUgYW5kIGxvY2sgdGhlIGNvbnRyYWN0LgoKQWZ0ZXIgdGhpcyBjYWxsOgotIE5vIGZ1cnRoZXIgYGNyZWF0ZV9zY2hlZHVsZWAsIGByZXZva2VgLCBgZXh0ZW5kX2NsaWZmYCwKYHBydW5lX3JlY2lwaWVudGAsIGBwcm9wb3NlX2FkbWluYCwgYGFjY2VwdF9hZG1pbmAsCmB1cGdyYWRlYCwgYHBhdXNlYCwgb3IgYHVucGF1c2VgIG9wZXJhdGlvbiBjYW4gZXZlciBzdWNjZWVkLgotIFRoZSBBZG1pbiBzdG9yYWdlIGVudHJ5IGlzIHJlbW92ZWQgYW5kIGEgYExvY2tlZGAgZmxhZyBpcyBzZXQuCi0gYGlzX2xvY2tlZCgpYCByZXR1cm5zIGB0cnVlYCBmcm9tIHRoZW4gb24uCgpIb2xkZXJzIGNhbiBzdGlsbCBgcmVsZWFzZWAgYW5kIGBrZWVwX2FsaXZlYC4gVGhlIGNvbnRyYWN0CmJlY29tZXMgZWZmZWN0aXZlbHkgaW1tdXRhYmxlLgoKKipUaGlzIGFjdGlvbiBpcyBpcnJldmVyc2libGUuKioAAAAMcmV2b2tlX2FkbWluAAAAAAAAAAA=",
-        "AAAAAAAAAGtSZXR1cm5zIGB0cnVlYCBvbmNlIGByZXZva2VfYWRtaW5gIGhhcyBiZWVuIGNhbGxlZC4gT25jZSBsb2NrZWQsIG5vCmFkbWluIG9wZXJhdGlvbiBjYW4gZXZlciBzdWNjZWVkIGFnYWluLgAAAAAJaXNfbG9ja2VkAAAAAAAAAAAAAAEAAAAB",
-        "AAAAAAAAADZSZXR1cm4gdGhlIG51bWJlciBvZiBzY2hlZHVsZXMgc3RvcmVkIGZvciBhIHJlY2lwaWVudC4AAAAAABJnZXRfc2NoZWR1bGVfY291bnQAAAAAAAEAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAABAAAABA==",
-        "AAAAAAAAADBSZXR1cm4gdGhlIGZ1bGwgc2NoZWR1bGUgc3RydWN0IGZvciBhIHJlY2lwaWVudC4AAAAMZ2V0X3NjaGVkdWxlAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAEAAAfQAAAAD1Zlc3RpbmdTY2hlZHVsZQA=",
+        "AAAAAAAAAEhDb21wYXJlIHRoZSB2ZXN0aW5nIGNvbnRyYWN0J3MgbGl2ZSB0b2tlbiBiYWxhbmNlIHRvIG91dHN0YW5kaW5nIGdyYW50cy4AAAAIc29sdmVuY3kAAAAAAAAAAQAAB9AAAAAIU29sdmVuY3k=",
         "AAAAAAAAADNSZXR1cm5zIHRoZSBhZG1pbiBhZGRyZXNzIG9mIHRoaXMgdmVzdGluZyBjb250cmFjdC4AAAAACWdldF9hZG1pbgAAAAAAAAAAAAABAAAAEw==",
-        "AAAAAAAAAH9SZXR1cm5zIHRoZSBhZGRyZXNzIHByb3Bvc2VkIHZpYSBgcHJvcG9zZV9hZG1pbmAgdGhhdCBoYXMgbm90IHlldAphY2NlcHRlZCB0aGUgcm9sZSwgb3IgYE5vbmVgIHdoZW4gbm8gdHJhbnNmZXIgaXMgaW4gcHJvZ3Jlc3MuAAAAAA1wZW5kaW5nX2FkbWluAAAAAAAAAAAAAAEAAAPoAAAAEw==",
-        "AAAAAAAAAERSZXR1cm5zIHRoZSB0b2tlbiBjb250cmFjdCBhZGRyZXNzIG1hbmFnZWQgYnkgdGhpcyB2ZXN0aW5nIGNvbnRyYWN0LgAAABJnZXRfdG9rZW5fY29udHJhY3QAAAAAAAAAAAABAAAAEw==",
-        "AAAAAAAAAEVSZXR1cm4gdGhlIG51bWJlciBvZiByZWNpcGllbnRzIHRyYWNrZWQgKGluY2x1ZGluZyBhbnkgcHJ1bmVkIHNsb3RzKS4AAAAAAAATZ2V0X3JlY2lwaWVudF9jb3VudAAAAAAAAAAAAQAAAAQ=",
-        "AAAAAAAAATFSZXR1cm4gcGFnaW5hdGVkIGxpc3Qgb2YgcmVjaXBpZW50cyB3aXRoIHZlc3Rpbmcgc2NoZWR1bGVzLgoKYHN0YXJ0YCDigJQgemVyby1iYXNlZCBvZmZzZXQgaW50byB0aGUgcmVjaXBpZW50cyBsaXN0LgpgbGltaXRgIOKAlCBtYXhpbXVtIG51bWJlciBvZiByZWNpcGllbnRzIHRvIHJldHVybi4KClBydW5lZCBzbG90cyAoc2VlIGBwcnVuZV9yZWNpcGllbnRgKSBhcmUgb21pdHRlZCBmcm9tIHRoZSByZXN1bHQsIHNvCmEgcGFnZSBtYXkgY29udGFpbiBmZXdlciB0aGFuIGBsaW1pdGAgZW50cmllcyBldmVuIGlmIG1vcmUgcmVtYWluLgAAAAAAABhnZXRfcmVjaXBpZW50c19wYWdpbmF0ZWQAAAACAAAAAAAAAAVzdGFydAAAAAAAAAQAAAAAAAAABWxpbWl0AAAAAAAABAAAAAEAAAPqAAAAEw==",
-        "AAAAAAAAAM5BZG1pbi1vbmx5OiByZW1vdmUgYSBmdWxseS1zZXR0bGVkIHJlY2lwaWVudCBmcm9tIHRoZSBlbnVtZXJhdGlvbgppbmRleC4gRG9lcyBub3QgdG91Y2ggdGhlIHJlY2lwaWVudCdzIHNjaGVkdWxlcyDigJQgaXQgb25seSBwcnVuZXMgdGhlCmVudW1lcmF0aW9uIHNsb3Qocykgc28gYGdldF9yZWNpcGllbnRzX3BhZ2luYXRlZGAgc3RvcHMgbGlzdGluZyB0aGVtLgAAAAAAD3BydW5lX3JlY2lwaWVudAAAAAABAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAA==",
+        "AAAAAAAAAGtSZXR1cm5zIGB0cnVlYCBvbmNlIGByZXZva2VfYWRtaW5gIGhhcyBiZWVuIGNhbGxlZC4gT25jZSBsb2NrZWQsIG5vCmFkbWluIG9wZXJhdGlvbiBjYW4gZXZlciBzdWNjZWVkIGFnYWluLgAAAAAJaXNfbG9ja2VkAAAAAAAAAAAAAAEAAAAB",
+        "AAAAAAAAADNSZXR1cm5zIGB0cnVlYCBpZiB0aGUgY29udHJhY3QgaXMgY3VycmVudGx5IHBhdXNlZC4AAAAACWlzX3BhdXNlZAAAAAAAAAAAAAABAAAAAQ==",
+        "AAAAAAAAAEFTZXQgdGhlIGFkbWluIGFuZCB0aGUgdG9rZW4gY29udHJhY3QgdGhpcyB2ZXN0aW5nIG1vZHVsZSBtYW5hZ2VzLgAAAAAAAAppbml0aWFsaXplAAAAAAACAAAAAAAAAAVhZG1pbgAAAAAAABMAAAAAAAAADnRva2VuX2NvbnRyYWN0AAAAAAATAAAAAA==",
+        "AAAAAAAAAXFSZWZyZXNoIGEgc2NoZWR1bGUncyBzdG9yYWdlIFRUTCB3aXRob3V0IHJlbGVhc2luZyB0b2tlbnMuCgpTY2hlZHVsZXMgd2hvc2UgcmVtYWluaW5nIGR1cmF0aW9uIGV4Y2VlZHMgdGhlIG5ldHdvcmsncyBtYXhpbXVtCmVudHJ5IFRUTCAocm91Z2hseSAxODAgZGF5cykgaGF2ZSB0aGVpciBzdG9yYWdlIFRUTCBjbGFtcGVkIGF0CmNyZWF0aW9uIHRpbWUgKHNlZSBgX3R0bF9sZWRnZXJzYCkuIEZvciBzdWNoIGxvbmctZGF0ZWQgZ3JhbnRzLApjYWxsIHRoaXMgYXQgbGVhc3Qgb25jZSBwZXIgVFRMIHdpbmRvdyB0byBrZWVwIHRoZSBlbnRyeSBmcm9tCmJlaW5nIGFyY2hpdmVkIGJldHdlZW4gY2xhaW1zLiBDYW4gYmUgY2FsbGVkIGJ5IGFueW9uZS4AAAAAAAAKa2VlcF9hbGl2ZQAAAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAA=",
+        "AAAAAAAAAFpSZWxlYXNlIGFsbCByZWxlYXNhYmxlIHRva2VucyBhY3Jvc3MgYWxsIG5vbi1yZXZva2VkIHNjaGVkdWxlcwppbiBhIHNpbmdsZSB0b2tlbiB0cmFuc2Zlci4AAAAAAAtyZWxlYXNlX2FsbAAAAAABAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAA==",
+        "AAAAAAAAADtBY2NlcHQgdGhlIGFkbWluIHJvbGUuIE11c3QgYmUgY2FsbGVkIGJ5IHRoZSBwZW5kaW5nIGFkbWluLgAAAAAMYWNjZXB0X2FkbWluAAAAAAAAAAA=",
+        "AAAAAAAAAiBBZG1pbi1vbmx5OiBleHRlbmQgdGhlIGNsaWZmIGxlZGdlciBvZiBhbiBleGlzdGluZyAobm9uLXJldm9rZWQpIHNjaGVkdWxlLgoKQWxzbyBzaGlmdHMgYGVuZF9sZWRnZXJgIGJ5IHRoZSBzYW1lIGRlbHRhIHNvIHRoYXQgdGhlIHRvdGFsIHZlc3RpbmcKZHVyYXRpb24gaXMgcHJlc2VydmVkIOKAlCB0aGUgcGVyLWxlZGdlciB1bmxvY2sgcmF0ZSByZW1haW5zIHVuY2hhbmdlZC4KClJ1bGVzIGVuZm9yY2VkOgotIGBuZXdfY2xpZmZgIG11c3QgYmUgc3RyaWN0bHkgZ3JlYXRlciB0aGFuIHRoZSBjdXJyZW50IGBjbGlmZl9sZWRnZXJgCihleHRlbnNpb24gb25seSDigJQgcmVkdWN0aW9uIGlzIG5ldmVyIGFsbG93ZWQpLgotIFRoZSBjdXJyZW50IGxlZGdlciBtdXN0IHN0aWxsIGJlIGJlZm9yZSB0aGUgY2xpZmYgKG9uY2UgdGhlIGNsaWZmIGhhcwphbHJlYWR5IHBhc3NlZCB0aGVyZSBpcyBub3RoaW5nIGxlZnQgdG8gZGVsYXkpLgotIGBuZXdfY2xpZmZgIG11c3QgcmVtYWluIHN0cmljdGx5IGxlc3MgdGhhbiB0aGUgc2hpZnRlZCBgZW5kX2xlZGdlcmAuAAAADGV4dGVuZF9jbGlmZgAAAAMAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAAAAAAACW5ld19jbGlmZgAAAAAAAAQAAAAAAAAABWluZGV4AAAAAAAD6AAAAAQAAAAA",
+        "AAAAAAAAADBSZXR1cm4gdGhlIGZ1bGwgc2NoZWR1bGUgc3RydWN0IGZvciBhIHJlY2lwaWVudC4AAAAMZ2V0X3NjaGVkdWxlAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAEAAAfQAAAAD1Zlc3RpbmdTY2hlZHVsZQA=",
+        "AAAAAAAAAeBQZXJtYW5lbnRseSByZXZva2UgdGhlIGFkbWluIHJvbGUgYW5kIGxvY2sgdGhlIGNvbnRyYWN0LgoKQWZ0ZXIgdGhpcyBjYWxsOgotIE5vIGZ1cnRoZXIgYGNyZWF0ZV9zY2hlZHVsZWAsIGByZXZva2VgLCBgZXh0ZW5kX2NsaWZmYCwKYHBydW5lX3JlY2lwaWVudGAsIGBwcm9wb3NlX2FkbWluYCwgYGFjY2VwdF9hZG1pbmAsCmB1cGdyYWRlYCwgYHBhdXNlYCwgb3IgYHVucGF1c2VgIG9wZXJhdGlvbiBjYW4gZXZlciBzdWNjZWVkLgotIFRoZSBBZG1pbiBzdG9yYWdlIGVudHJ5IGlzIHJlbW92ZWQgYW5kIGEgYExvY2tlZGAgZmxhZyBpcyBzZXQuCi0gYGlzX2xvY2tlZCgpYCByZXR1cm5zIGB0cnVlYCBmcm9tIHRoZW4gb24uCgpIb2xkZXJzIGNhbiBzdGlsbCBgcmVsZWFzZWAgYW5kIGBrZWVwX2FsaXZlYC4gVGhlIGNvbnRyYWN0CmJlY29tZXMgZWZmZWN0aXZlbHkgaW1tdXRhYmxlLgoKKipUaGlzIGFjdGlvbiBpcyBpcnJldmVyc2libGUuKioAAAAMcmV2b2tlX2FkbWluAAAAAAAAAAA=",
         "AAAAAAAAAENTdW0gdmVzdGVkIGFtb3VudCBhY3Jvc3MgYWxsIG5vbi1yZXZva2VkIHNjaGVkdWxlcyBmb3IgYSByZWNpcGllbnQuAAAAAAx0b3RhbF92ZXN0ZWQAAAABAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAQAAAAs=",
+        "AAAAAAAAAH9SZXR1cm5zIHRoZSBhZGRyZXNzIHByb3Bvc2VkIHZpYSBgcHJvcG9zZV9hZG1pbmAgdGhhdCBoYXMgbm90IHlldAphY2NlcHRlZCB0aGUgcm9sZSwgb3IgYE5vbmVgIHdoZW4gbm8gdHJhbnNmZXIgaXMgaW4gcHJvZ3Jlc3MuAAAAAA1wZW5kaW5nX2FkbWluAAAAAAAAAAAAAAEAAAPoAAAAEw==",
+        "AAAAAAAAAHpQcm9wb3NlIGEgbmV3IGFkbWluLiBNdXN0IGJlIGNhbGxlZCBieSB0aGUgY3VycmVudCBhZG1pbi4KVGhlIG5ldyBhZG1pbiBtdXN0IGNhbGwgYGFjY2VwdF9hZG1pbmAgdG8gZmluYWxpemUgdGhlIHRyYW5zZmVyLgAAAAAADXByb3Bvc2VfYWRtaW4AAAAAAAABAAAAAAAAAAluZXdfYWRtaW4AAAAAAAATAAAAAA==",
+        "AAAAAAAAAD9Ub3RhbCBhbW91bnQgdmVzdGVkIHNvIGZhciAobWF5IG9yIG1heSBub3QgaGF2ZSBiZWVuIHJlbGVhc2VkKS4AAAAADXZlc3RlZF9hbW91bnQAAAAAAAACAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAAAAAAVpbmRleAAAAAAAA+gAAAAEAAAAAQAAAAs=",
         "AAAAAAAAADlTdW0gcmVsZWFzZWQgYW1vdW50IGFjcm9zcyBhbGwgc2NoZWR1bGVzIGZvciBhIHJlY2lwaWVudC4AAAAAAAAOdG90YWxfcmVsZWFzZWQAAAAAAAEAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAABAAAACw==",
+        "AAAAAAAAAWVDcmVhdGUgYSBjbGlmZiArIGxpbmVhciB2ZXN0aW5nIHNjaGVkdWxlIGZvciBgcmVjaXBpZW50YC4KCmBjbGlmZl9sZWRnZXJgIOKAlCBsZWRnZXIgbnVtYmVyIHdoZW4gdG9rZW5zIHN0YXJ0IHVubG9ja2luZy4KYGVuZF9sZWRnZXJgICAg4oCUIGxlZGdlciBudW1iZXIgd2hlbiAxMDAgJSBpcyB2ZXN0ZWQuCgpUaGlzIGZ1bmN0aW9uIGF0b21pY2FsbHkgdHJhbnNmZXJzIGB0b3RhbF9hbW91bnRgIHRva2VucyBmcm9tIHRoZSBhZG1pbgp0byB0aGlzIGNvbnRyYWN0J3MgYWRkcmVzcyB1c2luZyB0cmFuc2ZlciwgZW5zdXJpbmcgdGhlIGNvbnRyYWN0CmlzIHByb3Blcmx5IGZ1bmRlZCBpbiB0aGUgc2FtZSB0cmFuc2FjdGlvbi4AAAAAAAAPY3JlYXRlX3NjaGVkdWxlAAAAAAQAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAAAAAAADHRvdGFsX2Ftb3VudAAAAAsAAAAAAAAADGNsaWZmX2xlZGdlcgAAAAQAAAAAAAAACmVuZF9sZWRnZXIAAAAAAAQAAAAA",
+        "AAAAAAAAAM5BZG1pbi1vbmx5OiByZW1vdmUgYSBmdWxseS1zZXR0bGVkIHJlY2lwaWVudCBmcm9tIHRoZSBlbnVtZXJhdGlvbgppbmRleC4gRG9lcyBub3QgdG91Y2ggdGhlIHJlY2lwaWVudCdzIHNjaGVkdWxlcyDigJQgaXQgb25seSBwcnVuZXMgdGhlCmVudW1lcmF0aW9uIHNsb3Qocykgc28gYGdldF9yZWNpcGllbnRzX3BhZ2luYXRlZGAgc3RvcHMgbGlzdGluZyB0aGVtLgAAAAAAD3BydW5lX3JlY2lwaWVudAAAAAABAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAA==",
+        "AAAAAAAAAClBbW91bnQgYWxyZWFkeSByZWxlYXNlZCB0byB0aGUgcmVjaXBpZW50LgAAAAAAAA9yZWxlYXNlZF9hbW91bnQAAAAAAgAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAAAAAAFaW5kZXgAAAAAAAPoAAAABAAAAAEAAAAL",
+        "AAAAAAAAADlUb3RhbCB0b2tlbnMgc3RpbGwgY29tbWl0dGVkIHRvIGFjdGl2ZSB2ZXN0aW5nIHNjaGVkdWxlcy4AAAAAAAAPdG90YWxfY29tbWl0dGVkAAAAAAAAAAABAAAACw==",
         "AAAAAAAAAEhTdW0gcmVsZWFzYWJsZSAodmVzdGVkIG1pbnVzIHJlbGVhc2VkKSBhY3Jvc3MgYWxsIG5vbi1yZXZva2VkIHNjaGVkdWxlcy4AAAAQdG90YWxfcmVsZWFzYWJsZQAAAAEAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAABAAAACw==",
         "AAAAAAAAAD1SZXR1cm4gYWxsIHNjaGVkdWxlIG9iamVjdHMgZm9yIGEgcmVjaXBpZW50IGluIGEgc2luZ2xlIGNhbGwuAAAAAAAAEWdldF9hbGxfc2NoZWR1bGVzAAAAAAAAAQAAAAAAAAAJcmVjaXBpZW50AAAAAAAAEwAAAAEAAAPqAAAH0AAAAA9WZXN0aW5nU2NoZWR1bGUA",
-        "AAAAAAAAAFpSZWxlYXNlIGFsbCByZWxlYXNhYmxlIHRva2VucyBhY3Jvc3MgYWxsIG5vbi1yZXZva2VkIHNjaGVkdWxlcwppbiBhIHNpbmdsZSB0b2tlbiB0cmFuc2Zlci4AAAAAAAtyZWxlYXNlX2FsbAAAAAABAAAAAAAAAAlyZWNpcGllbnQAAAAAAAATAAAAAA==" ]),
+        "AAAAAAAAADZSZXR1cm4gdGhlIG51bWJlciBvZiBzY2hlZHVsZXMgc3RvcmVkIGZvciBhIHJlY2lwaWVudC4AAAAAABJnZXRfc2NoZWR1bGVfY291bnQAAAAAAAEAAAAAAAAACXJlY2lwaWVudAAAAAAAABMAAAABAAAABA==",
+        "AAAAAAAAAERSZXR1cm5zIHRoZSB0b2tlbiBjb250cmFjdCBhZGRyZXNzIG1hbmFnZWQgYnkgdGhpcyB2ZXN0aW5nIGNvbnRyYWN0LgAAABJnZXRfdG9rZW5fY29udHJhY3QAAAAAAAAAAAABAAAAEw==",
+        "AAAAAAAAAEVSZXR1cm4gdGhlIG51bWJlciBvZiByZWNpcGllbnRzIHRyYWNrZWQgKGluY2x1ZGluZyBhbnkgcHJ1bmVkIHNsb3RzKS4AAAAAAAATZ2V0X3JlY2lwaWVudF9jb3VudAAAAAAAAAAAAQAAAAQ=",
+        "AAAAAAAAAEZDYW5jZWwgYSBwcm9wb3NlZCBhZG1pbiB0cmFuc2Zlci4gTXVzdCBiZSBjYWxsZWQgYnkgdGhlIGN1cnJlbnQgYWRtaW4uAAAAAAAVY2FuY2VsX2FkbWluX3Byb3Bvc2FsAAAAAAAAAAAAAAA=",
+        "AAAAAAAAAeFDcmVhdGUgbXVsdGlwbGUgdmVzdGluZyBzY2hlZHVsZXMgaW4gYSBzaW5nbGUgdHJhbnNhY3Rpb24uCgpBdG9taWNhbGx5IHRyYW5zZmVycyB0aGUgc3VtIG9mIGFsbCBgdG90YWxfYW1vdW50YCB2YWx1ZXMgZnJvbSB0aGUgYWRtaW4KdG8gdGhpcyBjb250cmFjdCAoUGhhc2UgMiksIHRoZW4gd3JpdGVzIGVhY2ggc2NoZWR1bGUgKFBoYXNlIDMpLiBJZiBhbnkKc3RlcCBwYW5pY3MgdGhlIGVudGlyZSB0cmFuc2FjdGlvbiByb2xscyBiYWNrLCBpbmNsdWRpbmcgdGhlIHRva2VuIHRyYW5zZmVyLgoKKipNYXhpbXVtIGJhdGNoIHNpemU6IDUwIHJlY2lwaWVudHMuKiogTGFyZ2VyIGJhdGNoZXMgcmlzayBleGNlZWRpbmcKU29yb2JhbidzIHBlci10cmFuc2FjdGlvbiBjb21wdXRlIGJ1ZGdldCBhbmQgd2lsbCBiZSByZWplY3RlZCB1cCBmcm9udAp3aXRoIGEgY2xlYXIgZXJyb3IgcmF0aGVyIHRoYW4gYW4gb3BhcXVlIHJlc291cmNlIGZhaWx1cmUuAAAAAAAAFmNyZWF0ZV9zY2hlZHVsZXNfYmF0Y2gAAAAAAAEAAAAAAAAACXNjaGVkdWxlcwAAAAAAA+oAAAfQAAAADVNjaGVkdWxlSW5wdXQAAAAAAAABAAAABA==",
+        "AAAAAAAAATFSZXR1cm4gcGFnaW5hdGVkIGxpc3Qgb2YgcmVjaXBpZW50cyB3aXRoIHZlc3Rpbmcgc2NoZWR1bGVzLgoKYHN0YXJ0YCDigJQgemVyby1iYXNlZCBvZmZzZXQgaW50byB0aGUgcmVjaXBpZW50cyBsaXN0LgpgbGltaXRgIOKAlCBtYXhpbXVtIG51bWJlciBvZiByZWNpcGllbnRzIHRvIHJldHVybi4KClBydW5lZCBzbG90cyAoc2VlIGBwcnVuZV9yZWNpcGllbnRgKSBhcmUgb21pdHRlZCBmcm9tIHRoZSByZXN1bHQsIHNvCmEgcGFnZSBtYXkgY29udGFpbiBmZXdlciB0aGFuIGBsaW1pdGAgZW50cmllcyBldmVuIGlmIG1vcmUgcmVtYWluLgAAAAAAABhnZXRfcmVjaXBpZW50c19wYWdpbmF0ZWQAAAACAAAAAAAAAAVzdGFydAAAAAAAAAQAAAAAAAAABWxpbWl0AAAAAAAABAAAAAEAAAPqAAAAEw==" ]),
       options
     )
   }
   public readonly fromJSON = {
-    initialize: this.txFromJSON<null>,
-        propose_admin: this.txFromJSON<null>,
-        accept_admin: this.txFromJSON<null>,
-        cancel_admin_proposal: this.txFromJSON<null>,
-        create_schedule: this.txFromJSON<null>,
-        create_schedules_batch: this.txFromJSON<u32>,
-        release: this.txFromJSON<null>,
-        keep_alive: this.txFromJSON<null>,
+    pause: this.txFromJSON<null>,
         revoke: this.txFromJSON<null>,
-        extend_cliff: this.txFromJSON<null>,
-        vested_amount: this.txFromJSON<i128>,
-        released_amount: this.txFromJSON<i128>,
-        total_committed: this.txFromJSON<i128>,
-        solvency: this.txFromJSON<Solvency>,
-        is_paused: this.txFromJSON<boolean>,
-        pause: this.txFromJSON<null>,
+        release: this.txFromJSON<null>,
         unpause: this.txFromJSON<null>,
         upgrade: this.txFromJSON<null>,
-        revoke_admin: this.txFromJSON<null>,
-        is_locked: this.txFromJSON<boolean>,
-        get_schedule_count: this.txFromJSON<u32>,
-        get_schedule: this.txFromJSON<VestingSchedule>,
+        solvency: this.txFromJSON<Solvency>,
         get_admin: this.txFromJSON<string>,
-        pending_admin: this.txFromJSON<Option<string>>,
-        get_token_contract: this.txFromJSON<string>,
-        get_recipient_count: this.txFromJSON<u32>,
-        get_recipients_paginated: this.txFromJSON<Array<string>>,
-        prune_recipient: this.txFromJSON<null>,
+        is_locked: this.txFromJSON<boolean>,
+        is_paused: this.txFromJSON<boolean>,
+        initialize: this.txFromJSON<null>,
+        keep_alive: this.txFromJSON<null>,
+        release_all: this.txFromJSON<null>,
+        accept_admin: this.txFromJSON<null>,
+        extend_cliff: this.txFromJSON<null>,
+        get_schedule: this.txFromJSON<VestingSchedule>,
+        revoke_admin: this.txFromJSON<null>,
         total_vested: this.txFromJSON<i128>,
+        pending_admin: this.txFromJSON<Option<string>>,
+        propose_admin: this.txFromJSON<null>,
+        vested_amount: this.txFromJSON<i128>,
         total_released: this.txFromJSON<i128>,
+        create_schedule: this.txFromJSON<null>,
+        prune_recipient: this.txFromJSON<null>,
+        released_amount: this.txFromJSON<i128>,
+        total_committed: this.txFromJSON<i128>,
         total_releasable: this.txFromJSON<i128>,
         get_all_schedules: this.txFromJSON<Array<VestingSchedule>>,
-        release_all: this.txFromJSON<null>
+        get_schedule_count: this.txFromJSON<u32>,
+        get_token_contract: this.txFromJSON<string>,
+        get_recipient_count: this.txFromJSON<u32>,
+        cancel_admin_proposal: this.txFromJSON<null>,
+        create_schedules_batch: this.txFromJSON<u32>,
+        get_recipients_paginated: this.txFromJSON<Array<string>>
   }
 }
