@@ -23,8 +23,8 @@ Built for founders, DAOs, and developers who need a clean interface to launch to
 
 | Layer | Tech |
 |---|---|
-| Smart Contracts | Rust + Soroban SDK |
-| Frontend | Next.js 16 (16.1.6) + React 19 + TypeScript |
+| Smart Contracts | Rust + soroban-sdk 27 (`wasm32v1-none`) |
+| Frontend | Next.js 16 + React 19 + TypeScript |
 | Styling | Tailwind CSS |
 | Wallet | Freighter API |
 | RPC | Stellar Horizon + Soroban RPC |
@@ -57,8 +57,9 @@ soroban-token-launchpad/
 
 ### Prerequisites
 
-- Node.js 18+
-- Rust + `stellar-cli`
+- Node.js 20+
+- Rust as pinned by `rust-toolchain.toml` (`rustup show` installs it)
+- `stellar-cli` v28+ (the older `soroban` binary will not work)
 - Freighter browser extension
 
 ### Install
@@ -76,7 +77,14 @@ cd contracts && stellar contract build
 cd frontend && npm run dev
 Deploy to testnet
 Bash
-npm run deploy:testnet
+# Once per network: uploads the wasm and deploys the token factory.
+node scripts/bootstrap-network.mjs --network testnet --source my-identity
+
+# Then launch tokens against it, as often as you like.
+node scripts/deploy-token.mjs --network testnet --source my-identity \
+  --name "My Token" --symbol MTK --supply 1000000
+
+# See docs/deploy.md for the full runbook, including mainnet.
 🤝 Contributing
 Contributions are welcome! Many issues are tagged good first issue and available through the Stellar Wave Program on Drips.
 
