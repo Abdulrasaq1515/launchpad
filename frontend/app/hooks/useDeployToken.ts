@@ -205,7 +205,7 @@ async function signPrepared(prepared: StellarSdk.Transaction, ctx: DeployContext
  * are Addresses, numeric fields get explicit widths, and optional fields pass
  * `null` for `None`.
  */
-function buildTokenConfigScVals(
+export function buildTokenConfigScVals(
   params: DeployTokenParams,
   deployer: string,
 ): StellarSdk.xdr.ScVal {
@@ -230,12 +230,23 @@ function buildTokenConfigScVals(
       symbol: params.symbol,
     },
     {
+      // Every key must be declared, and every key must be a `symbol`.
+      // nativeToScVal defaults an undeclared key to ScVal::String, and the
+      // contract's #[contracttype] struct is an ScMap keyed by Symbol. Mixing
+      // the two also breaks the host's key-ordering check, because ScVal sorts
+      // by type tag before value — which is the
+      //   "ScMap was not sorted by key for conversion to host object"
+      // the deploy simulation used to fail with.
       type: {
         admin: ["symbol", "address"],
+        authorization_required: ["symbol", "bool"],
+        authorization_revocable: ["symbol", "bool"],
         compliance_node: ["symbol", "address"],
         decimal: ["symbol", "u32"],
         initial_supply: ["symbol", "i128"],
         max_supply: ["symbol", "i128"],
+        name: ["symbol", "string"],
+        symbol: ["symbol", "string"],
       },
     },
   );
