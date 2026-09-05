@@ -25,7 +25,8 @@ import {
 } from "@stellar/stellar-sdk";
 import { getTokenActionBlockedReason } from "@/components/TokenStatusBanner";
 import type { TokenInfo, WalletTokenState } from "@/lib/stellar";
-import { toBaseUnits } from "@/lib/utils";
+import { toBaseUnits, fromBaseUnits } from "@/lib/utils";
+import { scValToNative } from "@/lib/soroban";
 
 const transferSchema = z.object({
   to: z.string().regex(/^G[A-Z2-7]{55}$/, "Invalid Stellar address (must start with G)"),
@@ -92,19 +93,12 @@ export function TransferPanel({
         .setTimeout(30).build();
       const sim = await rpc.simulateTransaction(tx);
       if ((await import("@stellar/stellar-sdk")).rpc.Api.isSimulationSuccess(sim) && sim.result) {
-        const balanceScVal = sim.result.retval;
-        const parts = balanceScVal.i128();
-        const hi = BigInt(parts.hi().toString());
-        const lo = BigInt(parts.lo().toString());
-        const rawBalance = (hi << BigInt(64)) + lo;
-        const divisor = BigInt(10) ** BigInt(tokenDecimals);
-        const whole = rawBalance / divisor;
-        const frac = rawBalance % divisor;
-        if (frac === BigInt(0)) setUserBalance(whole.toString());
-        else {
-          const fracStr = frac.toString().padStart(tokenDecimals, "0").replace(/0+$/, "");
-          setUserBalance(`${whole}.${fracStr}`);
-        }
+        // Decode and scale through the shared helpers. The hand-rolled
+        // (hi << 64n) + lo reassembly this replaces ignored the sign of the
+        // low word, and its own 10 ** decimals division was a fourth copy of
+        // the scaling logic fromBaseUnits already owns.
+        const rawBalance = scValToNative(sim.result.retval) as bigint;
+        setUserBalance(fromBaseUnits(rawBalance, tokenDecimals));
       } else setUserBalance("0");
     } catch (err) {
       console.error("Failed to fetch balance:", err);

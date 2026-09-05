@@ -115,7 +115,10 @@ export function useContractEvents(
           const evtLedger = readEventLedger(evt) || startLedgerRef.current;
           if (evtLedger > maxLedgerSeen) maxLedgerSeen = evtLedger;
 
-          const topics = readEventTopics(evt);
+          // readEventTopics returns unknown[]; the decoder re-parses each entry
+          // as an XDR-encoded string, so normalize first — same as the indexer
+          // path in lib/stellar.ts does.
+          const topics = readEventTopics(evt).map((t) => String(t));
           if (topics.length === 0) continue;
 
           const rawValue =

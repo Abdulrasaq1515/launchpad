@@ -240,7 +240,7 @@ export async function simulateVestingRelease(
 ): Promise<PreflightCheckResult> {
   const args = [new StellarSdk.Address(recipientAddress).toScVal()];
   if (scheduleIndex !== undefined) {
-    args.push(StellarSdk.nativeToScVal(BigInt(scheduleIndex), { type: "u32" }));
+    args.push(StellarSdk.nativeToScVal(Number(scheduleIndex), { type: "u32" }));
   }
 
   return simulateTransaction(vestingContractId, "release", args, config);
@@ -258,7 +258,7 @@ export async function simulateVestingRevoke(
 ): Promise<PreflightCheckResult> {
   const args = [new StellarSdk.Address(recipientAddress).toScVal()];
   if (scheduleIndex !== undefined) {
-    args.push(StellarSdk.nativeToScVal(BigInt(scheduleIndex), { type: "u32" }));
+    args.push(StellarSdk.nativeToScVal(Number(scheduleIndex), { type: "u32" }));
   }
 
   return simulateTransaction(vestingContractId, "revoke", args, config, adminAddress);
@@ -467,8 +467,8 @@ export async function simulateCreateSchedule(
   const args = [
     new StellarSdk.Address(recipientAddress).toScVal(),
     StellarSdk.nativeToScVal(BigInt(totalAmount), { type: "i128" }),
-    StellarSdk.nativeToScVal(BigInt(cliffLedger), { type: "u32" }),
-    StellarSdk.nativeToScVal(BigInt(endLedger), { type: "u32" }),
+    StellarSdk.nativeToScVal(Number(cliffLedger), { type: "u32" }),
+    StellarSdk.nativeToScVal(Number(endLedger), { type: "u32" }),
   ];
 
   return simulateTransaction(vestingContractId, "create_schedule", args, config, adminAddress);
@@ -482,7 +482,11 @@ export async function simulateApprove(
   ownerAddress: string,
   spenderAddress: string,
   amount: bigint | string,
-  expirationLedger: number = 10000000,
+  // No default: this is an absolute ledger sequence, not a duration. The
+  // 10,000,000 that used to sit here is already ~6x in the past on mainnet
+  // (ledger ~64.2M), so any caller that omitted it silently simulated against
+  // an expired allowance.
+  expirationLedger: number,
   config?: NetworkConfig,
 ): Promise<PreflightCheckResult> {
   if (!config) {
@@ -497,7 +501,7 @@ export async function simulateApprove(
     new StellarSdk.Address(ownerAddress).toScVal(),
     new StellarSdk.Address(spenderAddress).toScVal(),
     StellarSdk.nativeToScVal(BigInt(amount), { type: "i128" }),
-    StellarSdk.nativeToScVal(BigInt(expirationLedger), { type: "u32" }),
+    StellarSdk.nativeToScVal(Number(expirationLedger), { type: "u32" }),
   ];
 
   return simulateTransaction(contractId, "approve", args, config, ownerAddress);
@@ -522,7 +526,10 @@ export function buildRevokeAllowanceArgs(
     new StellarSdk.Address(ownerAddress).toScVal(),
     new StellarSdk.Address(spenderAddress).toScVal(),
     StellarSdk.nativeToScVal(BigInt(0), { type: "i128" }),
-    StellarSdk.nativeToScVal(BigInt(0), { type: "u32" }),
+    // u32 must be a plain number: a BigInt here still produces an scvU32, but
+    // one that throws "invalid u32 value" the moment it is serialised, so the
+    // revoke transaction could never actually be built.
+    StellarSdk.nativeToScVal(0, { type: "u32" }),
   ];
 }
 

@@ -119,7 +119,9 @@ function toU32ScVal(value: number): StellarSdk.xdr.ScVal {
   if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw new Error("Invalid u32 value");
   }
-  return StellarSdk.nativeToScVal(BigInt(value), { type: "u32" });
+  // Plain number, not BigInt: a BigInt still yields an scvU32, but one that
+  // throws "invalid u32 value" at serialisation time rather than here.
+  return StellarSdk.nativeToScVal(value, { type: "u32" });
 }
 
 async function fetchOptionalAddress(

@@ -7,6 +7,7 @@ import { PendingAdminBanner } from "@/components/PendingAdminBanner";
 import { VestingSolvencyBadge } from "@/components/VestingSolvencyBadge";
 import { useToast } from "@/app/providers/ToastProvider";
 import { useWallet } from "@/app/hooks/useWallet";
+import { truncateAddress } from "@/lib/stellar";
 import {
   fetchVestingAdminState,
   fetchAllVestingSchedules,
@@ -34,7 +35,7 @@ export function ClaimVesting() {
   // One VestingInfo entry per schedule index
   const [schedules, setSchedules] = useState<VestingInfo[]>([]);
   const [adminState, setAdminState] = useState<VestingAdminState | null>(null);
-  const [solvency, setSolvency] = useState
+  const [solvency, setSolvency] = useState<
     VestingSolvency | null | undefined
   >();
   const [loading, setLoading] = useState(false);

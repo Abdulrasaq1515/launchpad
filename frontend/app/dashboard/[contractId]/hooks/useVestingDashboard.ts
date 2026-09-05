@@ -467,8 +467,8 @@ async function readAnyContract(
   const { scValToNative } = await import("@/lib/soroban");
 
   const RPC_URL =
-    typeof window !== "undefined" && (window as Record<string, unknown>).__SOROPAD_RPC
-      ? String((window as Record<string, unknown>).__SOROPAD_RPC)
+    typeof window !== "undefined" && (window as unknown as Record<string, unknown>).__SOROPAD_RPC
+      ? String((window as unknown as Record<string, unknown>).__SOROPAD_RPC)
       : process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ??
         "https://soroban-testnet.stellar.org";
 

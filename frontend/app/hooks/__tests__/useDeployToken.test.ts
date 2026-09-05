@@ -110,14 +110,20 @@ jest.mock("../useWallet", () => {
   };
 });
 
+// The factory address is part of the network config (so testnet and mainnet
+// factories coexist), not a bare env var — so the test drives it through the
+// same mutable mock the hook actually reads.
+const networkMock = {
+  networkConfig: {
+    rpcUrl: "https://soroban-testnet.stellar.org",
+    passphrase: "Test SDF Network ; September 2015",
+    network: "testnet",
+    factoryAddress: undefined as string | undefined,
+  },
+};
+
 jest.mock("../../providers/NetworkProvider", () => ({
-  useNetwork: () => ({
-    networkConfig: {
-      rpcUrl: "https://soroban-testnet.stellar.org",
-      passphrase: "Test SDF Network ; September 2015",
-      network: "testnet",
-    },
-  }),
+  useNetwork: () => networkMock,
 }));
 
 jest.mock("@/lib/bindings/token/src/index", () => {
@@ -135,10 +141,9 @@ jest.mock("@/lib/bindings/token/src/index", () => {
   };
 });
 
-jest.mock("@/lib/utils", () => ({
-  toBaseUnits: (display: string | number, decimals: number) =>
-    BigInt(Math.round(Number(display) * 10 ** decimals)),
-}));
+// @/lib/utils is deliberately NOT mocked: toBaseUnits is the exact thing under
+// test on the deploy path, and the float-based stub that used to stand in here
+// reintroduced the rounding bug the real implementation exists to prevent.
 
 const baseParams = {
   name: "Test Token",
@@ -167,30 +172,26 @@ function render() {
 
 describe("useDeployToken (factory path)", () => {
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_USE_LEGACY_DEPLOY = "false";
-    process.env.NEXT_PUBLIC_FACTORY_ADDRESS = FACTORY_ADDRESS;
-    process.env.NEXT_PUBLIC_TOKEN_WASM_HASH = TOKEN_WASM_HASH;
+    networkMock.networkConfig.factoryAddress = FACTORY_ADDRESS;
     walletMock.__wallet.connected = true;
     resetMocks();
   });
 
   afterEach(() => {
-    delete process.env.NEXT_PUBLIC_USE_LEGACY_DEPLOY;
-    delete process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
-    delete process.env.NEXT_PUBLIC_TOKEN_WASM_HASH;
+    networkMock.networkConfig.factoryAddress = undefined;
   });
 
-  it("throws a validation error when the wallet is not connected", async () => {
+  it("throws a wallet error when the wallet is not connected", async () => {
     walletMock.__wallet.connected = false;
     const result = render();
 
     await expect(
       act(() => result.current.deployToken(baseParams)),
-    ).rejects.toMatchObject({ type: "validation" });
+    ).rejects.toMatchObject({ type: "wallet" });
   });
 
   it("throws a validation error when the factory address is not configured", async () => {
-    process.env.NEXT_PUBLIC_FACTORY_ADDRESS = "";
+    networkMock.networkConfig.factoryAddress = undefined;
     const result = render();
 
     await expect(
@@ -250,62 +251,5 @@ describe("useDeployToken (factory path)", () => {
     expect(config.max_supply).toBeNull();
     expect(config.compliance_node).toBeNull();
     expect(config.authorization_required).toBe(false);
-  });
-});
-
-describe("useDeployToken (legacy path)", () => {
-  beforeEach(() => {
-    process.env.NEXT_PUBLIC_USE_LEGACY_DEPLOY = "true";
-    process.env.NEXT_PUBLIC_FACTORY_ADDRESS = FACTORY_ADDRESS;
-    process.env.NEXT_PUBLIC_TOKEN_WASM_HASH = TOKEN_WASM_HASH;
-    walletMock.__wallet.connected = true;
-    resetMocks();
-  });
-
-  afterEach(() => {
-    delete process.env.NEXT_PUBLIC_USE_LEGACY_DEPLOY;
-    delete process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
-    delete process.env.NEXT_PUBLIC_TOKEN_WASM_HASH;
-  });
-
-  it("throws a validation error when the WASM hash is missing", async () => {
-    process.env.NEXT_PUBLIC_TOKEN_WASM_HASH = "";
-    const result = render();
-
-    await expect(
-      act(() => result.current.deployToken(baseParams)),
-    ).rejects.toMatchObject({ type: "validation" });
-  });
-
-  it("deploys the contract then initializes it as a separate transaction", async () => {
-    sdk.__mutable.addressToString = "C-LEGACY-TOKEN-ADDRESS";
-    sdk.__mutable.getTxResult = {
-      status: "SUCCESS",
-      resultMetaXdr: {
-        v3: () => ({
-          sorobanMeta: () => ({ returnValue: () => ({}) }),
-        }),
-      },
-    };
-    const result = render();
-
-    let deployment: any;
-    await act(async () => {
-      deployment = await result.current.deployToken(baseParams);
-    });
-
-    expect(deployment).toEqual({
-      contractId: "C-LEGACY-TOKEN-ADDRESS",
-      transactionHash: "deadbeef",
-    });
-
-    // The deploy step uses createCustomContract (no contract.call in the legacy path)
-    expect(sdk.__contractCalls.length).toBe(0);
-    // initialize() invoked on the token client with scaled supplies
-    expect(tokenMock.__initialize).toHaveBeenCalledTimes(1);
-    const initArgs = tokenMock.__initialize.mock.calls[0][0];
-    expect(initArgs.admin).toBe(baseParams.adminAddress);
-    expect(initArgs.initial_supply).toBe(10_000_000_000n);
-    expect(initArgs.max_supply).toBeUndefined();
   });
 });

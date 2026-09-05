@@ -1,34 +1,55 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    BytesN, Env, String, Vec,
+    contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
+    symbol_short, Address, BytesN, Env, String, Vec,
 };
+
+// ---------------------------------------------------------------------------
+// Token interface
+// ---------------------------------------------------------------------------
+
+/// The one token entry point the factory calls.
+///
+/// Declared as a client interface rather than depending on the `soroban-token`
+/// crate: linking the whole token contract in as an rlib pulled its entire
+/// body into the factory's WASM (~20 KB of code the factory never executes)
+/// and broke fat LTO. The signature must stay in step with
+/// `TokenContract::initialize`; `factory_initializes_token_with_full_config`
+/// exercises the real token contract through this client and fails if it drifts.
+#[allow(clippy::too_many_arguments)]
+#[contractclient(name = "TokenClient")]
+pub trait TokenInterface {
+    fn initialize(
+        env: Env,
+        admin: Address,
+        decimal: u32,
+        name: String,
+        symbol: String,
+        initial_supply: i128,
+        max_supply: Option<i128>,
+        authorization_required: bool,
+        authorization_revocable: bool,
+        compliance_node: Option<Address>,
+        contract_uri: Option<String>,
+    );
+}
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Soroban's network-enforced ceiling on how far into the future a ledger
-/// entry's TTL can be extended in a single call (`max_entry_ttl` in the
-/// network config; 6,312,000 ledgers on mainnet). Passing a value above
-/// this fails the transaction.
-const MAX_ENTRY_TTL_LEDGERS: u32 = 6_312_000;
-
-/// TTL extension applied to deployment records so a factory that has been
+/// TTL extension requested for deployment records, so a factory that has been
 /// idle for a while never silently loses its index.
 ///
-/// 365 days * 24h * 60m * 60s / 5s-per-ledger = 6,307,200 ledgers, clamped
-/// to `MAX_ENTRY_TTL_LEDGERS` so this can never exceed what the network
-/// will accept.
-const TTL_LEDGERS: u32 = {
-    const YEAR_LEDGERS: u64 = 365 * 24 * 60 * 60 / 5;
-    if YEAR_LEDGERS < MAX_ENTRY_TTL_LEDGERS as u64 {
-        YEAR_LEDGERS as u32
-    } else {
-        MAX_ENTRY_TTL_LEDGERS
-    }
-};
+/// 365 days * 24h * 60m * 60s / 5s-per-ledger = 6,307,200 ledgers. This is only
+/// a *request*: `_ttl_ledgers` clamps it to `env.storage().max_ttl()` at call
+/// time. The constant this replaced (6,312,000) was the soroban-sdk **test
+/// harness** default, not a network value, so the clamp it fed could never
+/// fire; the real `max_entry_ttl` on testnet and mainnet is 3,110,400 ledgers
+/// (~180 days). Same reasoning, and same fix, as `TTL_LEDGERS` in the token
+/// contract.
+const TTL_LEDGERS: u32 = 365 * 24 * 60 * 60 / 5;
 
 // ---------------------------------------------------------------------------
 // Storage keys
@@ -277,7 +298,7 @@ impl FactoryContract {
         salt: BytesN<32>,
         config: TokenConfig,
     ) {
-        soroban_token::TokenContractClient::new(env, token_address).initialize(
+        TokenClient::new(env, token_address).initialize(
             &config.admin,
             &config.decimal,
             &config.name,
@@ -322,6 +343,12 @@ impl FactoryContract {
             .unwrap_or(0)
     }
 
+    /// The TTL to actually request: our desired window, clamped to whatever
+    /// the live network permits. Over-asking fails the transaction.
+    fn _ttl_ledgers(env: &Env) -> u32 {
+        TTL_LEDGERS.min(env.storage().max_ttl())
+    }
+
     fn _record_deployment(env: &Env, token: &Address) {
         let count = Self::_deployment_count(env);
 
@@ -331,7 +358,7 @@ impl FactoryContract {
         let count_key = DataKey::DeploymentCount;
         env.storage().persistent().set(&count_key, &(count + 1));
 
-        let ttl_ledgers = TTL_LEDGERS;
+        let ttl_ledgers = Self::_ttl_ledgers(env);
         env.storage()
             .persistent()
             .extend_ttl(&key, ttl_ledgers, ttl_ledgers);

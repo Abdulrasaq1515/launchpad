@@ -239,7 +239,7 @@ function ProjectionChart({
             color: "#fff",
             fontSize: "12px",
           }}
-          formatter={(v: number) => [v.toLocaleString(), "Unlocks"]}
+          formatter={(v) => [Number(v ?? 0).toLocaleString(), "Unlocks"]}
         />
         <Area
           type="monotone"

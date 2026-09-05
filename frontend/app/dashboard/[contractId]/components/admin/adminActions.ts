@@ -51,8 +51,14 @@ export interface AdminActionContext {
   getVestingClient: (vestingContractId: string) => VestingClient;
 }
 
-/** The concrete contract call an action resolves to. */
-export type ResolvedCall = AssembledTransaction<any>;
+/**
+ * The concrete contract call an action resolves to.
+ *
+ * The return type varies per binding method (null, i128, bool …) and nothing
+ * downstream reads it — `useAdminAction` only touches `.built` — so the payload
+ * is `unknown` rather than `any`.
+ */
+export type ResolvedCall = AssembledTransaction<unknown>;
 
 export interface AdminActionDef<TData> {
   /** Used in toast titles and the screen-reader announcement. */
@@ -182,10 +188,7 @@ export const ADMIN_ACTIONS: AdminActionRegistry = {
 
   "cancel-admin": {
     label: "Cancel admin transfer",
-    resolve: () => ({
-      method: "cancel_admin_proposal",
-      args: [],
-    }),
+    resolve: async (data, ctx) => ctx.tokenClient.cancel_admin_proposal(),
   },
 
   "accept-admin": {
@@ -321,7 +324,7 @@ export const ADMIN_ACTIONS: AdminActionRegistry = {
     successToast: {
       title: "Account frozen",
       message:
-        "The account can no longer send or burn tokens. It can still receive them.",
+        "The account can no longer send, burn, or receive tokens.",
     },
   },
 
@@ -378,11 +381,10 @@ export const ADMIN_ACTIONS: AdminActionRegistry = {
 
   "vesting-upgrade": {
     label: "Upgrade vesting contract",
-    resolve: (data) => ({
-      contractId: data.vestingContract,
-      method: "upgrade",
-      args: [xdr.ScVal.scvBytes(Buffer.from(data.wasmHash, "hex"))],
-    }),
+    resolve: async (data, ctx) =>
+      ctx.getVestingClient(data.vestingContract).upgrade({
+        new_wasm_hash: Buffer.from(data.wasmHash, "hex"),
+      }),
     preflight: "none",
     successToast: {
       title: "Vesting contract upgraded",
