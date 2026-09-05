@@ -2,25 +2,23 @@ import { useState, useEffect, useRef } from "react";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { useNetwork } from "@/app/providers/NetworkProvider";
 import {
+  type ActivitySource,
   type TokenActivityInfo,
-  type TokenActivityType,
-  TRACKED_EVENT_TOPICS,
-  toScVal,
-  decodeString,
-  decodeI128,
-  decodeAddress,
-  readEventTopics,
+  decodeActivityEvent,
   readEventId,
-  readEventTxHash,
   readEventLedger,
   readEventTimestamp,
+  readEventTopics,
+  readEventTxHash,
 } from "@/lib/stellar";
-
-// Convert the exported array to a Set for efficient lookup
-const TRACKED_TOPICS = new Set<string>(TRACKED_EVENT_TOPICS);
 
 interface UseContractEventsOptions {
   intervalMs?: number;
+  /**
+   * Vesting contract to poll alongside the token, when the token has one.
+   * Its events are decoded as vesting events and typed `vesting:*`.
+   */
+  vestingContractId?: string;
 }
 
 interface RpcEvent {
@@ -34,6 +32,15 @@ interface RpcEvent {
   txHash?: string;
 }
 
+/**
+ * Poll a token contract — and optionally the vesting contract holding its
+ * tokens — for new events.
+ *
+ * Both are polled in one subscription so the feed stays a single ordered
+ * stream. Each event is decoded against the contract that emitted it, because
+ * `init`, `pause`, `unpause`, `prop_adm`, `revoked` and `upgrade` are emitted
+ * by both with identical topic tuples.
+ */
 export function useContractEvents(
   contractId: string,
   options?: UseContractEventsOptions,
@@ -42,11 +49,20 @@ export function useContractEvents(
   const [events, setEvents] = useState<TokenActivityInfo[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
+  const vestingContractId = options?.vestingContractId;
   const startLedgerRef = useRef<number | null>(null);
   const intervalMs = options?.intervalMs ?? 10000;
 
   useEffect(() => {
     if (!contractId || !networkConfig?.rpcUrl) return;
+
+    /** Which contract an event came from, so the decoder can disambiguate. */
+    const sourceOf = (id: string | undefined): ActivitySource =>
+      vestingContractId && id === vestingContractId ? "vesting" : "token";
+
+    const watchedIds = vestingContractId
+      ? [contractId, vestingContractId]
+      : [contractId];
 
     const rpc = new StellarSdk.rpc.Server(networkConfig.rpcUrl);
     const getEvents = (
@@ -68,7 +84,7 @@ export function useContractEvents(
       try {
         const response = await getEvents.call(rpc, {
           startLedger,
-          filters: [{ type: "contract", contractIds: [contractId] }],
+          filters: [{ type: "contract", contractIds: watchedIds }],
           pagination: { limit: 100 },
         });
         return response?.events ?? [];
@@ -102,120 +118,26 @@ export function useContractEvents(
           const topics = readEventTopics(evt);
           if (topics.length === 0) continue;
 
-          const topic0 = toScVal(topics[0]);
-          if (!topic0) continue;
-
-          const typePath = decodeString(topic0);
-
-          // Keep all tracked topics; label anything else as "other"
-          const eventType: TokenActivityType = TRACKED_TOPICS.has(typePath)
-            ? (typePath as TokenActivityType)
-            : "other";
-
-          const rawValue = (evt as { value?: unknown; data?: unknown }).value ??
+          const rawValue =
+            (evt as { value?: unknown; data?: unknown }).value ??
             (evt as { data?: unknown }).data;
-          const data = toScVal(rawValue as string | undefined);
 
-          const record: TokenActivityInfo = {
-            id: readEventId(evt, `${readEventTxHash(evt)}-${evtLedger}`),
-            pagingToken: evt.pagingToken ?? "",
-            type: eventType,
-            amount: "-",
-            from: "-",
-            to: "-",
-            txHash: readEventTxHash(evt),
-            timestamp: readEventTimestamp(evt),
-          };
+          // One decoder, shared with lib/stellar.ts. The duplicate switch that
+          // used to live here is how the two drifted apart in the first place.
+          const record = decodeActivityEvent(
+            topics,
+            rawValue as string | undefined,
+            {
+              id: readEventId(evt, `${readEventTxHash(evt)}-${evtLedger}`),
+              txHash: readEventTxHash(evt),
+              ledger: evtLedger,
+              timestamp: readEventTimestamp(evt),
+            },
+            sourceOf(evt.contractId),
+          );
+          if (!record) continue;
 
-          switch (typePath) {
-            case "mint":
-              if (data) record.amount = decodeI128(data);
-              // SEP-41: topics are ("mint", admin, to)
-              if (topics.length > 2) {
-                const adminVal = toScVal(topics[1]);
-                const toVal = toScVal(topics[2]);
-                if (adminVal) record.from = decodeAddress(adminVal);
-                if (toVal) record.to = decodeAddress(toVal);
-              }
-              break;
-
-            case "burn":
-              if (data) record.amount = decodeI128(data);
-              if (topics.length > 1) {
-                const fromVal = toScVal(topics[1]);
-                if (fromVal) record.from = decodeAddress(fromVal);
-              }
-              break;
-
-            case "clawback":
-              if (data) record.amount = decodeI128(data);
-              // SEP-41: topics are ("clawback", admin, from)
-              if (topics.length > 2) {
-                const adminVal = toScVal(topics[1]);
-                const fromVal = toScVal(topics[2]);
-                if (adminVal) record.to = decodeAddress(adminVal);
-                if (fromVal) record.from = decodeAddress(fromVal);
-              }
-              break;
-
-            case "transfer":
-              if (data) record.amount = decodeI128(data);
-              if (topics.length > 2) {
-                const fromVal = toScVal(topics[1]);
-                const toVal = toScVal(topics[2]);
-                if (fromVal) record.from = decodeAddress(fromVal);
-                if (toVal) record.to = decodeAddress(toVal);
-              }
-              break;
-
-            case "freeze":
-            case "unfreeze":
-            case "authorize":
-            case "rvk_auth":
-              if (topics.length > 1) {
-                const addrVal = toScVal(topics[1]);
-                if (addrVal) record.subject = decodeAddress(addrVal);
-              }
-              break;
-
-            case "prop_adm":
-              // topics are ("prop_adm", current_admin, new_admin)
-              if (topics.length > 2) {
-                const currentVal = toScVal(topics[1]);
-                const newVal = toScVal(topics[2]);
-                if (currentVal) record.from = decodeAddress(currentVal);
-                if (newVal) record.to = decodeAddress(newVal);
-              }
-              break;
-
-            case "set_admin":
-              // topics are ("set_admin", old_admin, new_admin)
-              if (topics.length > 2) {
-                const oldVal = toScVal(topics[1]);
-                const newVal = toScVal(topics[2]);
-                if (oldVal) record.from = decodeAddress(oldVal);
-                if (newVal) record.to = decodeAddress(newVal);
-              }
-              break;
-
-            case "revoked":
-            case "pause":
-            case "unpause":
-            case "upgrade":
-            case "init":
-            case "approve":
-            case "set_max_b":
-            case "set_cnode":
-            case "upd_uri":
-            case "set_areq":
-            case "rvk_rvc":
-              // no extra payload needed
-              break;
-
-            default:
-              // unknown topic — kept as "other", no extra decoding
-              break;
-          }
+          record.pagingToken = evt.pagingToken ?? "";
 
           newRecords.push(record);
         }
@@ -251,7 +173,7 @@ export function useContractEvents(
       isMounted = false;
       if (timerId) clearInterval(timerId);
     };
-  }, [contractId, networkConfig, intervalMs]);
+  }, [contractId, vestingContractId, networkConfig, intervalMs]);
 
   return { events, error };
 }

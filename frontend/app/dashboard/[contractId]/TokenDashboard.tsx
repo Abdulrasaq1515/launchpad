@@ -31,6 +31,7 @@ import {
   NotATokenState,
 } from "./components/DashboardUi";
 import { useContractRead } from "./hooks/useContractRead";
+import { getTrackedDeployments } from "@/lib/deployments";
 import { useFrozenAccounts } from "./hooks/useFrozenAccounts";
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,24 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { publicKey, connected } = useWallet();
+
+  // The vesting contract holding this token's grants, if the deployment
+  // recorded one. `TrackedDeployment.vestingContractId` exists for exactly
+  // this; when it is absent the feed simply shows token events as before.
+  const [vestingContractId, setVestingContractId] = useState<
+    string | undefined
+  >();
+
+  useEffect(() => {
+    if (!publicKey) {
+      setVestingContractId(undefined);
+      return;
+    }
+    const tracked = getTrackedDeployments(publicKey).find(
+      (deployment) => deployment.contractId === contractId,
+    );
+    setVestingContractId(tracked?.vestingContractId);
+  }, [publicKey, contractId]);
   const { networkConfig } = useNetwork();
   const { fetchTokenInfo, fetchTopHolders, fetchSupplyBreakdown } =
     useSoroban();
@@ -289,7 +308,10 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-gray-500">
           {t("sections.tokenActivity")}
         </h2>
-        <ActivityFeed accountId={contractId} />
+        <ActivityFeed
+          accountId={contractId}
+          vestingContractId={vestingContractId}
+        />
       </section>
 
       {/* Transfer Tokens Panel */}

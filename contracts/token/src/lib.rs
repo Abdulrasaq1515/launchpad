@@ -9,28 +9,32 @@ use soroban_sdk::{
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Soroban's network-enforced ceiling on how far into the future a ledger
-/// entry's TTL can be extended in a single call (`max_entry_ttl` in the
-/// network config; 6,312,000 ledgers on mainnet). Passing a value above
-/// this to `extend_ttl` fails the transaction.
-const MAX_ENTRY_TTL_LEDGERS: u32 = 6_312_000;
-
-/// TTL extension applied to balance/allowance entries so a holder who
-/// never touches their tokens still keeps them live for about a year.
+/// Desired lifetime for the ledger entries this contract keeps alive:
+/// about a year, assuming Stellar's ~5s ledger close time.
 ///
-/// 365 days * 24h * 60m * 60s / 5s-per-ledger = 6,307,200 ledgers, clamped
-/// to `MAX_ENTRY_TTL_LEDGERS` so this can never exceed what the network
-/// will accept even if the formula above or the network parameter changes.
-const TTL_LEDGERS: u32 = {
-    const YEAR_LEDGERS: u64 = 365 * 24 * 60 * 60 / 5;
-    if YEAR_LEDGERS < MAX_ENTRY_TTL_LEDGERS as u64 {
-        YEAR_LEDGERS as u32
-    } else {
-        MAX_ENTRY_TTL_LEDGERS
-    }
-};
+/// 365 days * 24h * 60m * 60s / 5s-per-ledger = 6,307,200 ledgers.
+///
+/// This is only a *request*. The effective window is whatever the network
+/// allows — `env.storage().max_ttl()`, read at call time — and every
+/// `extend_ttl` site clamps to it. On testnet and mainnet today
+/// `max_entry_ttl` is 3,110,400 ledgers, so entries actually live **about
+/// 180 days, not a year**. Holders who need their balance to outlive that
+/// must interact with the contract at least once per window.
+///
+/// Deliberately not compared against a hardcoded ceiling: the previous
+/// constant here (6,312,000) was the soroban-sdk *test harness* default
+/// (`soroban-sdk/src/env.rs`), not a network value, so the clamp it fed
+/// could never fire. The test environment still reports 6,312,000, which is
+/// why no test in this file asserts a specific network figure.
+const TTL_LEDGERS: u32 = 365 * 24 * 60 * 60 / 5;
 
 /// Maximum lifetime for an admin transfer proposal before it becomes invalid.
+///
+/// This is a deadline in ledger numbers, not a storage TTL, so it is not
+/// clamped to `max_ttl()`. Note the instance entry holding the proposal is
+/// clamped, so on today's networks the entry's ~180-day window expires before
+/// this ~365-day deadline does; a proposal left untouched that long needs the
+/// instance kept alive by any other call.
 const ADMIN_PROPOSAL_EXPIRY_LEDGERS: u32 = TTL_LEDGERS;
 
 // ---------------------------------------------------------------------------
@@ -187,6 +191,7 @@ impl TokenContract {
     ///
     /// `authorization_revocable`: when true, the admin may revoke a holder's
     /// authorization, preventing them from receiving further transfers.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -247,7 +252,7 @@ impl TokenContract {
         if authorization_required {
             let key = DataKey::AuthorizedHolder(admin.clone());
             env.storage().persistent().set(&key, &true);
-            let ttl_ledgers = TTL_LEDGERS;
+            let ttl_ledgers = Self::_ttl_ledgers(&env);
             env.storage()
                 .persistent()
                 .extend_ttl(&key, ttl_ledgers, ttl_ledgers);
@@ -277,7 +282,7 @@ impl TokenContract {
         Self::_mint(&env, &to, amount);
 
         // Extend TTL for the balance key to prevent archiving
-        let ttl_ledgers = TTL_LEDGERS;
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
         let key = DataKey::Balance(to);
         env.storage()
             .persistent()
@@ -330,11 +335,10 @@ impl TokenContract {
             .instance()
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(&env, TokenError::Locked));
-            .expect("admin revoked");
         Self::_check_compliance(&env, &from, &admin);
         Self::_transfer_bypass_frozen(&env, &from, &admin, amount);
 
-        let ttl_ledgers = TTL_LEDGERS;
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
         let from_key = DataKey::Balance(from.clone());
         let admin_key = DataKey::Balance(admin.clone());
         env.storage()
@@ -637,7 +641,7 @@ impl TokenContract {
     pub fn update_contract_uri(env: Env, uri: String) {
         Self::_require_admin(&env);
         env.storage().instance().set(&DataKey::ContractUri, &uri);
-        env.events().publish((symbol_short!("update_uri"),), uri);
+        env.events().publish((symbol_short!("upd_uri"),), uri);
     }
 
     /// Upgrade this contract's WASM code hash in place. Admin only.
@@ -674,7 +678,7 @@ impl TokenContract {
 
         // Extend TTL for both balance keys to prevent archiving
         // Use a standard TTL extension (e.g., 52 weeks in ledgers)
-        let ttl_ledgers = TTL_LEDGERS;
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
         let from_key = DataKey::Balance(from);
         let to_key = DataKey::Balance(to);
         env.storage()
@@ -775,7 +779,11 @@ impl TokenContract {
                 expiration_ledger,
             };
             env.storage().temporary().set(&key, &value);
-            let ttl_ledgers = expiration_ledger.saturating_sub(current_ledger);
+            // Clamp to max_ttl so the host does not reject the extend_ttl call
+            // for temporary entries whose expiration_ledger was approved past
+            // the network ceiling (fixes the partial-spend revert — see #344).
+            let ttl_ledgers = (expiration_ledger.saturating_sub(current_ledger))
+                .min(env.storage().max_ttl());
             if ttl_ledgers > 0 {
                 env.storage()
                     .temporary()
@@ -788,7 +796,7 @@ impl TokenContract {
         Self::_transfer(&env, &from, &to, amount);
 
         // Extend TTL for balance keys to prevent archiving
-        let ttl_ledgers = TTL_LEDGERS;
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
         let from_key = DataKey::Balance(from);
         let to_key = DataKey::Balance(to);
         env.storage()
@@ -825,7 +833,11 @@ impl TokenContract {
                 expiration_ledger,
             };
             env.storage().temporary().set(&key, &value);
-            let ttl_ledgers = expiration_ledger.saturating_sub(current_ledger);
+            // Clamp to max_ttl so the host does not reject the extend_ttl call
+            // for temporary entries whose expiration_ledger was approved past
+            // the network ceiling (fixes the partial-spend revert — see #344).
+            let ttl_ledgers = (expiration_ledger.saturating_sub(current_ledger))
+                .min(env.storage().max_ttl());
             if ttl_ledgers > 0 {
                 env.storage()
                     .temporary()
@@ -958,7 +970,20 @@ impl TokenContract {
     /// The cap is only enforced while an admin exists. After
     /// [`revoke_admin`](Self::revoke_admin) removes the admin the cap becomes
     /// inactive so the token remains fully transferable.
+    ///
+    /// Once the contract is locked this returns `None` even if a percentage was
+    /// stored, so the getter never reports a limit that is not being enforced.
+    /// The stored value is deliberately left in place (so a counterfactual
+    /// re-init after a future upgrade sees it) but is masked by the lock state.
     pub fn max_balance_per_account(env: Env) -> Option<u32> {
+        let locked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Locked)
+            .unwrap_or(false);
+        if locked {
+            return None;
+        }
         env.storage().instance().get(&DataKey::MaxBalancePerAccount)
     }
 
@@ -1038,9 +1063,7 @@ impl TokenContract {
 
     /// Returns the contract metadata URI, if one has been configured.
     pub fn contract_uri(env: Env) -> Option<String> {
-        env.storage()
-            .instance()
-            .get(&DataKey::ContractUri)
+        env.storage().instance().get(&DataKey::ContractUri)
     }
 
     /// Returns the configured compliance node, if any.
@@ -1081,6 +1104,18 @@ impl TokenContract {
         admin.require_auth();
     }
 
+    /// The TTL to request for a persistent entry: our desired window, capped
+    /// at what the network will actually honour.
+    ///
+    /// `soroban-env-host` silently lowers an over-long `extend_ttl` on a
+    /// *persistent* entry rather than erroring, so an unclamped call is not a
+    /// hard failure — it just quietly gets you a shorter entry than the code
+    /// appears to ask for. Clamping here keeps the requested and effective
+    /// values the same, so the archival window is legible from the source.
+    fn _ttl_ledgers(env: &Env) -> u32 {
+        TTL_LEDGERS.min(env.storage().max_ttl())
+    }
+
     fn _require_not_locked(env: &Env) {
         let locked: bool = env
             .storage()
@@ -1119,22 +1154,16 @@ impl TokenContract {
             return;
         };
 
-        let admin: Option<Address> = env
+        let Some(admin) = env
             .storage()
             .instance()
-            .get(&DataKey::Admin);
-//         let Some(admin) = env
-//             .storage()
-//             .instance()
-//             .get::<DataKey, Address>(&DataKey::Admin)
-//         else {
-//             return; // contract is locked; cap no longer enforced
-//         };
+            .get::<DataKey, Address>(&DataKey::Admin)
+        else {
+            return; // contract is locked (admin revoked); cap no longer enforced
+        };
 
-        if let Some(ref admin_addr) = admin {
-            if to == admin_addr {
-                return;
-            }
+        if to == &admin {
+            return; // the admin is exempt from the cap
         }
 
         let max_allowed = supply
@@ -1338,7 +1367,7 @@ impl TokenContract {
             .persistent()
             .set(&from_key, &(from_balance - amount));
 
-        let ttl_ledgers = TTL_LEDGERS;
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
         env.storage()
             .persistent()
             .extend_ttl(&from_key, ttl_ledgers, ttl_ledgers);
@@ -1533,29 +1562,28 @@ mod test {
     // same set directly from source and fails CI if it and
     // `docs/events.json` disagree.
     const EXPECTED_TOPICS: [&str; 22] = [
-        "init",
-        "mint",
-        "burn",
-        "clawback",
-        "transfer",
         "approve",
         "authorize",
-        "revoked",
+        "burn",
+        "clawback",
+        "cncl_adm",
         "freeze",
-        "unfreeze",
+        "init",
+        "mint",
         "pause",
-        "unpause",
-        "authorize",
-        "upgrade",
-        "set_max_b",
-        "set_cnode",
         "prop_adm",
-        "set_admin",
-        "rvk_auth",
-        "upd_uri",
-        "set_areq",
-        "rvk_rvc",
         "rev_auth",
+        "revoked",
+        "rvk_rvc",
+        "set_admin",
+        "set_areq",
+        "set_cnode",
+        "set_max_b",
+        "transfer",
+        "unfreeze",
+        "unpause",
+        "upd_uri",
+        "upgrade",
     ];
 
     /// Asserts the set of `symbol_short!("...")` topic-0 literals used in
@@ -1582,7 +1610,7 @@ mod test {
             let mut found = false;
             while let Some(pos) = rest.find(NEEDLE) {
                 let after = &rest[pos + NEEDLE.len()..];
-                if after.as_bytes().len() > topic.len()
+                if after.len() > topic.len()
                     && after.starts_with(topic)
                     && after.as_bytes()[topic.len()] == b'"'
                 {
@@ -1618,10 +1646,43 @@ mod test {
     // ── TTL constant tests ──────────────────────────────────────────────
 
     #[test]
-    fn test_ttl_ledgers_is_about_one_year() {
-        // 5s per ledger is the assumption baked into TTL_LEDGERS; if that
-        // assumption or the formula ever changes, this test catches it
-        // instead of the archival-window math silently rotting again.
+    fn test_ttl_requests_are_clamped_to_the_network_ceiling() {
+        // The archival window is decided by the clamp, not by TTL_LEDGERS:
+        // every site asks for TTL_LEDGERS and gets `min(request, max_ttl())`.
+        //
+        // This deliberately asserts a *relationship* rather than a number.
+        // The soroban-sdk test harness reports a `max_entry_ttl` of 6,312,000
+        // (its own default, `soroban-sdk/src/env.rs`), while testnet and
+        // mainnet both enforce 3,110,400. A test pinning either figure would
+        // mislead — and pinning the harness value is exactly how the old
+        // ceiling went unnoticed (#398). Note this also means the clamp does
+        // *not* bind under test, but does bind on both real networks, where
+        // the effective window is about 180 days rather than a year.
+        let env = Env::default();
+        let contract_id = env.register_contract(None, TokenContract);
+
+        env.as_contract(&contract_id, || {
+            let network_max = env.storage().max_ttl();
+            let effective = TokenContract::_ttl_ledgers(&env);
+
+            assert_eq!(
+                effective,
+                TTL_LEDGERS.min(network_max),
+                "the effective TTL must be the request clamped to the network \
+                 ceiling, never the raw request"
+            );
+            assert!(
+                effective <= network_max,
+                "effective TTL ({effective}) exceeds the network ceiling \
+                 ({network_max}); extend_ttl would be silently lowered"
+            );
+        });
+    }
+
+    #[test]
+    fn test_ttl_ledgers_encodes_a_one_year_request() {
+        // Documents intent only: 5s per ledger for 365 days. The window a
+        // holder actually gets is shorter wherever the network says so.
         let days = (TTL_LEDGERS as u64 * 5) / (24 * 60 * 60);
         assert_eq!(days, 365);
     }
@@ -1641,7 +1702,7 @@ mod test {
             &7u32,
             &String::from_str(&env, "TestToken"),
             &String::from_str(&env, "TST"),
-            &1_000_000_0000000i128, // 1M tokens with 7 decimals
+            &10_000_000_000_000_i128, // 1M tokens with 7 decimals
             &None,
             &false,
             &false,
@@ -1668,8 +1729,8 @@ mod test {
 
         // total_supply == 1_000_000_0000000; 10% == 100_000_0000000.
         // Transfering the full 10% cap should succeed.
-        client.transfer(&admin, &user, &100_000_0000000i128);
-        assert_eq!(client.balance(&user), 100_000_0000000i128);
+        client.transfer(&admin, &user, &1_000_000_000_000_i128);
+        assert_eq!(client.balance(&user), 1_000_000_000_000_i128);
     }
 
     #[test]
@@ -1677,7 +1738,7 @@ mod test {
         let (_, client, admin, user) = setup();
 
         client.set_max_balance_per_account(&Some(10u32));
-        client.transfer(&admin, &user, &100_000_0000000i128);
+        client.transfer(&admin, &user, &1_000_000_000_000_i128);
 
         // one more token should exceed cap.
         assert_eq!(
@@ -1693,14 +1754,14 @@ mod test {
         client.set_max_balance_per_account(&Some(10u32));
 
         // mint up to cap succeeds
-        client.mint(&user, &100_000_0000000i128);
-        assert_eq!(client.balance(&user), 100_000_0000000i128);
+        client.mint(&user, &1_000_000_000_000_i128);
+        assert_eq!(client.balance(&user), 1_000_000_000_000_i128);
     }
 
     #[test]
     #[should_panic(expected = "max balance per account exceeded")]
     fn test_set_max_balance_per_account_mint_exceeds_panics() {
-        let (_, client, admin, user) = setup();
+        let (_, client, _admin, user) = setup();
 
         client.set_max_balance_per_account(&Some(10u32));
 
@@ -1726,8 +1787,8 @@ mod test {
         assert_eq!(client.symbol(), String::from_str(&env, "TST"));
         assert_eq!(client.decimals(), 7u32);
         assert_eq!(client.admin(), admin.clone());
-        assert_eq!(client.total_supply(), 1_000_000_0000000i128);
-        assert_eq!(client.balance(&admin), 1_000_000_0000000i128);
+        assert_eq!(client.total_supply(), 10_000_000_000_000_i128);
+        assert_eq!(client.balance(&admin), 10_000_000_000_000_i128);
     }
 
     #[test]
@@ -1750,27 +1811,27 @@ mod test {
     #[test]
     fn test_mint() {
         let (_, client, admin, user) = setup();
-        client.mint(&user, &500_0000000i128);
-        assert_eq!(client.balance(&user), 500_0000000i128);
+        client.mint(&user, &5_000_000_000_i128);
+        assert_eq!(client.balance(&user), 5_000_000_000_i128);
         assert_eq!(
             client.total_supply(),
-            1_000_000_0000000i128 + 500_0000000i128
+            10_000_000_000_000_i128 + 5_000_000_000_i128
         );
         // admin balance unchanged
-        assert_eq!(client.balance(&admin), 1_000_000_0000000i128);
+        assert_eq!(client.balance(&admin), 10_000_000_000_000_i128);
     }
 
     #[test]
     fn test_burn() {
         let (_, client, admin, _) = setup();
-        client.burn(&admin, &100_0000000i128);
+        client.burn(&admin, &1_000_000_000_i128);
         assert_eq!(
             client.balance(&admin),
-            1_000_000_0000000i128 - 100_0000000i128
+            10_000_000_000_000_i128 - 1_000_000_000_i128
         );
         assert_eq!(
             client.total_supply(),
-            1_000_000_0000000i128 - 100_0000000i128
+            10_000_000_000_000_i128 - 1_000_000_000_i128
         );
     }
 
@@ -1845,30 +1906,30 @@ mod test {
     #[test]
     fn test_total_burned_after_single_burn() {
         let (_, client, admin, _) = setup();
-        client.burn(&admin, &100_0000000i128);
-        assert_eq!(client.total_burned(), 100_0000000i128);
+        client.burn(&admin, &1_000_000_000_i128);
+        assert_eq!(client.total_burned(), 1_000_000_000_i128);
     }
 
     #[test]
     fn test_total_burned_after_two_burns() {
         let (_, client, admin, _) = setup();
-        client.burn(&admin, &100_0000000i128);
-        client.burn(&admin, &250_0000000i128);
-        assert_eq!(client.total_burned(), 350_0000000i128);
+        client.burn(&admin, &1_000_000_000_i128);
+        client.burn(&admin, &2_500_000_000_i128);
+        assert_eq!(client.total_burned(), 3_500_000_000_i128);
     }
 
     #[test]
     fn test_burn_admin_updates_total_burned() {
         let (_, client, admin, user) = setup();
-        client.transfer(&admin, &user, &100_0000000i128);
+        client.transfer(&admin, &user, &1_000_000_000_i128);
 
-        client.burn_admin(&user, &40_0000000i128);
+        client.burn_admin(&user, &400_000_000_i128);
 
-        assert_eq!(client.balance(&user), 60_0000000i128);
-        assert_eq!(client.total_burned(), 40_0000000i128);
+        assert_eq!(client.balance(&user), 600_000_000_i128);
+        assert_eq!(client.total_burned(), 400_000_000_i128);
         assert_eq!(
             client.total_supply(),
-            1_000_000_0000000i128 - 40_0000000i128
+            10_000_000_000_000_i128 - 400_000_000_i128
         );
     }
 
@@ -1876,18 +1937,18 @@ mod test {
     fn test_burn_updates_total_burned_and_total_supply_each_time() {
         let (_, client, admin, _) = setup();
 
-        client.burn(&admin, &100_0000000i128);
-        assert_eq!(client.total_burned(), 100_0000000i128);
+        client.burn(&admin, &1_000_000_000_i128);
+        assert_eq!(client.total_burned(), 1_000_000_000_i128);
         assert_eq!(
             client.total_supply(),
-            1_000_000_0000000i128 - 100_0000000i128
+            10_000_000_000_000_i128 - 1_000_000_000_i128
         );
 
-        client.burn(&admin, &250_0000000i128);
-        assert_eq!(client.total_burned(), 350_0000000i128);
+        client.burn(&admin, &2_500_000_000_i128);
+        assert_eq!(client.total_burned(), 3_500_000_000_i128);
         assert_eq!(
             client.total_supply(),
-            1_000_000_0000000i128 - 350_0000000i128
+            10_000_000_000_000_i128 - 3_500_000_000_i128
         );
     }
 
@@ -1895,13 +1956,13 @@ mod test {
     fn test_mint_does_not_change_total_burned() {
         let (_, client, admin, user) = setup();
 
-        client.burn(&admin, &100_0000000i128);
-        client.mint(&user, &25_0000000i128);
+        client.burn(&admin, &1_000_000_000_i128);
+        client.mint(&user, &250_000_000_i128);
 
-        assert_eq!(client.total_burned(), 100_0000000i128);
+        assert_eq!(client.total_burned(), 1_000_000_000_i128);
         assert_eq!(
             client.total_supply(),
-            1_000_000_0000000i128 - 100_0000000i128 + 25_0000000i128
+            10_000_000_000_000_i128 - 1_000_000_000_i128 + 250_000_000_i128
         );
     }
 
@@ -1918,13 +1979,13 @@ mod test {
     fn test_burn_self_reduces_balance_and_supply() {
         let (_, client, admin, user) = setup();
         // Admin sends some tokens to user, who then burns them themselves.
-        client.transfer(&admin, &user, &500_0000000i128);
+        client.transfer(&admin, &user, &5_000_000_000_i128);
         let supply_before = client.total_supply();
 
-        client.burn_self(&user, &200_0000000i128);
+        client.burn_self(&user, &2_000_000_000_i128);
 
-        assert_eq!(client.balance(&user), 300_0000000i128);
-        assert_eq!(client.total_supply(), supply_before - 200_0000000i128);
+        assert_eq!(client.balance(&user), 3_000_000_000_i128);
+        assert_eq!(client.total_supply(), supply_before - 2_000_000_000_i128);
     }
 
     #[test]
@@ -1971,14 +2032,14 @@ mod test {
     #[test]
     fn test_transfer() {
         let (_, client, admin, user) = setup();
-        client.transfer(&admin, &user, &250_0000000i128);
+        client.transfer(&admin, &user, &2_500_000_000_i128);
         assert_eq!(
             client.balance(&admin),
-            1_000_000_0000000i128 - 250_0000000i128
+            10_000_000_000_000_i128 - 2_500_000_000_i128
         );
-        assert_eq!(client.balance(&user), 250_0000000i128);
+        assert_eq!(client.balance(&user), 2_500_000_000_i128);
         // total supply unchanged
-        assert_eq!(client.total_supply(), 1_000_000_0000000i128);
+        assert_eq!(client.total_supply(), 10_000_000_000_000_i128);
     }
 
     #[test]
@@ -1995,15 +2056,15 @@ mod test {
         let (env, client, admin, user) = setup();
         let spender = Address::generate(&env);
 
-        client.approve(&admin, &spender, &100_0000000i128, &1000u32);
-        assert_eq!(client.allowance(&admin, &spender), 100_0000000i128);
+        client.approve(&admin, &spender, &1_000_000_000_i128, &1000u32);
+        assert_eq!(client.allowance(&admin, &spender), 1_000_000_000_i128);
 
-        client.transfer_from(&spender, &admin, &user, &60_0000000i128);
-        assert_eq!(client.allowance(&admin, &spender), 40_0000000i128);
-        assert_eq!(client.balance(&user), 60_0000000i128);
+        client.transfer_from(&spender, &admin, &user, &600_000_000_i128);
+        assert_eq!(client.allowance(&admin, &spender), 400_000_000_i128);
+        assert_eq!(client.balance(&user), 600_000_000_i128);
         assert_eq!(
             client.balance(&admin),
-            1_000_000_0000000i128 - 60_0000000i128
+            10_000_000_000_000_i128 - 600_000_000_i128
         );
     }
 
@@ -2026,18 +2087,18 @@ mod test {
         let (env, client, admin, _) = setup();
         let spender = Address::generate(&env);
 
-        client.approve(&admin, &spender, &100_0000000i128, &1000u32);
+        client.approve(&admin, &spender, &1_000_000_000_i128, &1000u32);
         let supply_before = client.total_supply();
 
-        client.burn_from(&spender, &admin, &60_0000000i128);
+        client.burn_from(&spender, &admin, &600_000_000_i128);
 
-        assert_eq!(client.allowance(&admin, &spender), 40_0000000i128);
+        assert_eq!(client.allowance(&admin, &spender), 400_000_000_i128);
         assert_eq!(
             client.balance(&admin),
-            1_000_000_0000000i128 - 60_0000000i128
+            10_000_000_000_000_i128 - 600_000_000_i128
         );
-        assert_eq!(client.total_supply(), supply_before - 60_0000000i128);
-        assert_eq!(client.total_burned(), 60_0000000i128);
+        assert_eq!(client.total_supply(), supply_before - 600_000_000_i128);
+        assert_eq!(client.total_burned(), 600_000_000_i128);
     }
 
     #[test]
@@ -2306,10 +2367,7 @@ mod test {
     fn test_admin_getter_after_revoke_panics() {
         let (_, client, _, _) = setup();
         client.revoke_admin();
-        assert_eq!(
-            client.try_admin(),
-            Err(Ok(TokenError::Locked.into()))
-        );
+        assert_eq!(client.try_admin(), Err(Ok(TokenError::Locked.into())));
     }
 
     #[test]
@@ -2400,6 +2458,33 @@ mod test {
 
         client.burn_self(&user, &100i128);
         assert_eq!(client.balance(&user), 550i128);
+    }
+
+    #[test]
+    fn test_non_admin_can_exceed_cap_after_revoke() {
+        let (_, client, admin, user) = setup();
+
+        // Enable a whale cap and move some value to a non-admin holder.
+        client.set_max_balance_per_account(&Some(10u32));
+        client.transfer(&admin, &user, &100_000i128);
+
+        // While the cap is active, exceeding 10% of total supply is rejected.
+        // total_supply == 1_000_000_0000000, 10% == 100_000_0000000.
+        assert_eq!(
+            client.try_transfer(&admin, &user, &100_000_0000000i128),
+            Err(Ok(TokenError::ExceedsMaxBalance.into()))
+        );
+
+        // After revoke_admin the cap is deactivated along with the admin role.
+        client.revoke_admin();
+        assert!(client.is_locked());
+
+        // The getter goes honest: it no longer reports an enforced limit.
+        assert_eq!(client.max_balance_per_account(), None);
+
+        // A non-admin can now accumulate past the former cap without panic.
+        client.transfer(&admin, &user, &100_000_0000000i128);
+        assert_eq!(client.balance(&user), 100_000_0100000i128);
     }
 
     #[test]
@@ -2526,8 +2611,8 @@ mod test {
         client.pause();
 
         // Read-only getters should still work
-        assert_eq!(client.total_supply(), 1_000_000_0000000i128);
-        assert_eq!(client.balance(&admin), 1_000_000_0000000i128);
+        assert_eq!(client.total_supply(), 10_000_000_000_000_i128);
+        assert_eq!(client.balance(&admin), 10_000_000_000_000_i128);
         assert!(client.is_paused());
     }
 
@@ -2581,8 +2666,8 @@ mod test {
             &7u32,
             &String::from_str(&env, "CappedToken"),
             &String::from_str(&env, "CAP"),
-            &500_0000000i128,
-            &Some(1_000_0000000i128),
+            &5_000_000_000_i128,
+            &Some(10_000_000_000_i128),
             &false,
             &false,
             &None,
@@ -2601,14 +2686,14 @@ mod test {
     #[test]
     fn test_max_supply_getter_some() {
         let (_, client, _, _) = setup_with_cap();
-        assert_eq!(client.max_supply(), Some(1_000_0000000i128));
+        assert_eq!(client.max_supply(), Some(10_000_000_000_i128));
     }
 
     #[test]
     fn test_mint_within_max_supply() {
         let (_, client, _, user) = setup_with_cap();
-        client.mint(&user, &500_0000000i128);
-        assert_eq!(client.total_supply(), 1_000_0000000i128);
+        client.mint(&user, &5_000_000_000_i128);
+        assert_eq!(client.total_supply(), 10_000_000_000_i128);
     }
 
     #[test]
@@ -2624,9 +2709,9 @@ mod test {
     fn test_mint_exact_max_supply() {
         let (_, client, _, user) = setup_with_cap();
         // Mint exactly to the cap boundary
-        client.mint(&user, &500_0000000i128);
-        assert_eq!(client.total_supply(), 1_000_0000000i128);
-        assert_eq!(client.max_supply(), Some(1_000_0000000i128));
+        client.mint(&user, &5_000_000_000_i128);
+        assert_eq!(client.total_supply(), 10_000_000_000_i128);
+        assert_eq!(client.max_supply(), Some(10_000_000_000_i128));
     }
 
     #[test]
@@ -2643,8 +2728,8 @@ mod test {
             &7u32,
             &String::from_str(&env, "Bad"),
             &String::from_str(&env, "BAD"),
-            &2_000_0000000i128,
-            &Some(1_000_0000000i128),
+            &20_000_000_000_i128,
+            &Some(10_000_000_000_i128),
             &false,
             &false,
             &None,
@@ -2765,7 +2850,7 @@ mod test {
             &7u32,
             &String::from_str(&env, "RegToken"),
             &String::from_str(&env, "REG"),
-            &1_000_0000000i128,
+            &10_000_000_000_i128,
             &None,
             &true,
             &true,
@@ -2806,7 +2891,7 @@ mod test {
     fn test_transfer_to_unauthorized_blocked() {
         let (_, client, admin, user) = setup_with_auth_required();
         assert_eq!(
-            client.try_transfer(&admin, &user, &100_0000000i128),
+            client.try_transfer(&admin, &user, &1_000_000_000_i128),
             Err(Ok(TokenError::NotAuthorizedHolder.into()))
         );
     }
@@ -2816,15 +2901,15 @@ mod test {
         let (_, client, admin, user) = setup_with_auth_required();
         client.authorize_holder(&user);
         assert!(client.is_authorized(&user));
-        client.transfer(&admin, &user, &100_0000000i128);
-        assert_eq!(client.balance(&user), 100_0000000i128);
+        client.transfer(&admin, &user, &1_000_000_000_i128);
+        assert_eq!(client.balance(&user), 1_000_000_000_i128);
     }
 
     #[test]
     fn test_revoke_authorization_blocks_transfer() {
         let (_, client, admin, user) = setup_with_auth_required();
         client.authorize_holder(&user);
-        client.transfer(&admin, &user, &100_0000000i128);
+        client.transfer(&admin, &user, &1_000_000_000_i128);
         client.revoke_authorization(&user);
         assert!(!client.is_authorized(&user));
     }
@@ -2902,6 +2987,7 @@ mod test {
             &None,
             &true,
             &false, // revocable = false from deploy
+            &None,
             &None,
         );
 

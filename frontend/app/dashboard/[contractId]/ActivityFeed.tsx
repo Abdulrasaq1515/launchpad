@@ -15,6 +15,14 @@ import {
   UserCheck,
   UserX,
   Upload,
+  CalendarPlus,
+  CalendarClock,
+  Layers,
+  HandCoins,
+  Ban,
+  Eraser,
+  UserCog,
+  Rocket,
 } from "lucide-react";
 import {
   type TokenActivityInfo,
@@ -23,9 +31,23 @@ import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { useSoroban } from "@/hooks/useSoroban";
 import { useContractEvents } from "@/hooks/useContractEvents";
 
-export default function ActivityFeed({ accountId }: { accountId: string }) {
+export default function ActivityFeed({
+  accountId,
+  vestingContractId,
+}: {
+  accountId: string;
+  /**
+   * Vesting contract holding this token's grants, when one is known. Its
+   * events are folded into the same feed so a recipient has one audit trail
+   * covering both the token and the contract that holds their tokens.
+   */
+  vestingContractId?: string;
+}) {
   const { fetchAccountOperations } = useSoroban();
-  const { events: liveEvents } = useContractEvents(accountId, { intervalMs: 10000 });
+  const { events: liveEvents } = useContractEvents(accountId, {
+    intervalMs: 10000,
+    vestingContractId,
+  });
   const [operations, setOperations] = useState<TokenActivityInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -136,14 +158,43 @@ export default function ActivityFeed({ accountId }: { accountId: string }) {
         return <PlayCircle className="h-4 w-4 text-green-400" />;
       case "authorize":
         return <ShieldCheck className="h-4 w-4 text-emerald-400" />;
-      case "unauthorize":
+      case "rev_auth":
         return <ShieldOff className="h-4 w-4 text-orange-400" />;
       case "set_admin":
         return <UserCheck className="h-4 w-4 text-stellar-400" />;
-      case "revoke_admin":
+      case "revoked":
         return <UserX className="h-4 w-4 text-red-400" />;
       case "upgrade":
         return <Upload className="h-4 w-4 text-purple-400" />;
+
+      // ── Vesting contract ──
+      case "vesting:create":
+        return <CalendarPlus className="h-4 w-4 text-blue-400" />;
+      case "vesting:batch":
+        return <Layers className="h-4 w-4 text-blue-400" />;
+      case "vesting:release":
+        return <HandCoins className="h-4 w-4 text-green-400" />;
+      case "vesting:revoke":
+        return <Ban className="h-4 w-4 text-red-400" />;
+      case "vesting:clf_ext":
+        return <CalendarClock className="h-4 w-4 text-amber-400" />;
+      case "vesting:prune":
+        return <Eraser className="h-4 w-4 text-gray-400" />;
+      case "vesting:prop_adm":
+        return <UserCog className="h-4 w-4 text-stellar-400" />;
+      case "vesting:acc_adm":
+        return <UserCheck className="h-4 w-4 text-stellar-400" />;
+      case "vesting:revoked":
+        return <UserX className="h-4 w-4 text-red-400" />;
+      case "vesting:init":
+        return <Rocket className="h-4 w-4 text-purple-400" />;
+      case "vesting:pause":
+        return <PauseCircle className="h-4 w-4 text-yellow-400" />;
+      case "vesting:unpause":
+        return <PlayCircle className="h-4 w-4 text-green-400" />;
+      case "vesting:upgrade":
+        return <Upload className="h-4 w-4 text-purple-400" />;
+
       default:
         return <ArrowRight className="h-4 w-4 text-gray-400" />;
     }
@@ -160,10 +211,28 @@ export default function ActivityFeed({ accountId }: { accountId: string }) {
       case "pause":         return "Token paused";
       case "unpause":       return "Token unpaused";
       case "authorize":     return "Authorized";
-      case "unauthorize":   return "Unauthorize";
+      case "rev_auth":      return "Authorization revoked";
       case "set_admin":     return "Admin set";
-      case "revoke_admin":  return "Admin revoked";
+      case "revoked":       return "Admin revoked";
       case "upgrade":       return "Contract upgraded";
+
+      // ── Vesting contract ──
+      // Named so a reader can tell them apart from the token's own events:
+      // both contracts emit init, pause, unpause, prop_adm, revoked, upgrade.
+      case "vesting:create":   return "Vesting schedule created";
+      case "vesting:batch":    return "Vesting schedules created (batch)";
+      case "vesting:release":  return "Vested tokens released";
+      case "vesting:revoke":   return "Vesting revoked";
+      case "vesting:clf_ext":  return "Vesting cliff extended";
+      case "vesting:prune":    return "Vesting recipient pruned";
+      case "vesting:prop_adm": return "Vesting admin proposed";
+      case "vesting:acc_adm":  return "Vesting admin accepted";
+      case "vesting:revoked":  return "Vesting admin revoked";
+      case "vesting:init":     return "Vesting contract initialized";
+      case "vesting:pause":    return "Vesting paused";
+      case "vesting:unpause":  return "Vesting unpaused";
+      case "vesting:upgrade":  return "Vesting contract upgraded";
+
       default:              return "Other";
     }
   };
@@ -174,19 +243,35 @@ export default function ActivityFeed({ accountId }: { accountId: string }) {
         return "text-blue-400 bg-blue-400/10 border-blue-400/20";
       case "burn":
       case "clawback":
-      case "revoke_admin":
+      case "revoked":
+      case "vesting:revoke":
+      case "vesting:revoked":
         return "text-red-400 bg-red-400/10 border-red-400/20";
       case "transfer":
       case "unpause":
       case "authorize":
+      case "vesting:release":
+      case "vesting:unpause":
         return "text-green-400 bg-green-400/10 border-green-400/20";
+      case "vesting:create":
+      case "vesting:batch":
+        return "text-blue-400 bg-blue-400/10 border-blue-400/20";
+      case "vesting:clf_ext":
+        return "text-amber-400 bg-amber-400/10 border-amber-400/20";
+      case "vesting:prop_adm":
+      case "vesting:acc_adm":
+        return "text-stellar-400 bg-stellar-400/10 border-stellar-400/20";
+      case "vesting:init":
+      case "vesting:upgrade":
+        return "text-purple-400 bg-purple-400/10 border-purple-400/20";
       case "freeze":
         return "text-cyan-400 bg-cyan-400/10 border-cyan-400/20";
       case "unfreeze":
         return "text-teal-400 bg-teal-400/10 border-teal-400/20";
       case "pause":
+      case "vesting:pause":
         return "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
-      case "unauthorize":
+      case "rev_auth":
         return "text-orange-400 bg-orange-400/10 border-orange-400/20";
       case "set_admin":
         return "text-stellar-400 bg-stellar-400/10 border-stellar-400/20";

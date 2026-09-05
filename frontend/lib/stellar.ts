@@ -1005,7 +1005,16 @@ export async function fetchVestedAmount(
  * Fetch transaction history (events) for a token contract via the Mercury indexer.
  * Uses cursor-based pagination to walk past the Soroban RPC retention window.
  */
-/** All event topic names the indexer and live-poll hooks subscribe to. */
+/**
+ * Every topic the token contract emits, and the set the indexer and live-poll
+ * hooks subscribe to against a token contract address.
+ *
+ * Derived from the `symbol_short!` literals in `contracts/token/src/lib.rs`
+ * (its own `EXPECTED_TOPICS` fixture is the source of truth). Kept in sync by
+ * `lib/__tests__/trackedEventTopics.test.ts`, which reads the contract source
+ * directly — the drift this list had accumulated is exactly what that test
+ * now prevents.
+ */
 export const TRACKED_EVENT_TOPICS = [
   "init",
   "transfer",
@@ -1017,33 +1026,85 @@ export const TRACKED_EVENT_TOPICS = [
   "pause",
   "unpause",
   "authorize",
-  "rvk_auth",
+  "rev_auth",
   "revoked",
   "upgrade",
   "approve",
   "set_max_b",
   "set_cnode",
   "prop_adm",
+  "cncl_adm",
   "set_admin",
   "upd_uri",
   "set_areq",
   "rvk_rvc",
 ] as const;
 
+/**
+ * Every topic the vesting contract emits.
+ *
+ * Note `init`, `pause`, `unpause`, `prop_adm`, `revoked` and `upgrade` are
+ * emitted by *both* contracts with identical topic tuples, so topic-only
+ * filtering cannot tell them apart. Decoding is keyed on the emitting
+ * contract as well as the topic — see `decodeActivityEvent`.
+ */
+export const TRACKED_VESTING_EVENT_TOPICS = [
+  "init",
+  "prop_adm",
+  "acc_adm",
+  "create",
+  "batch",
+  "release",
+  "revoke",
+  "clf_ext",
+  "pause",
+  "unpause",
+  "prune",
+  "upgrade",
+  "revoked",
+] as const;
+
+/** Which contract emitted an event. Disambiguates the shared topic names. */
+export type ActivitySource = "token" | "vesting";
+
 type TrackedTopic = (typeof TRACKED_EVENT_TOPICS)[number];
+type TrackedVestingTopic = (typeof TRACKED_VESTING_EVENT_TOPICS)[number];
 
 function isTrackedTopic(s: string): s is TrackedTopic {
   return (TRACKED_EVENT_TOPICS as readonly string[]).includes(s);
+}
+
+function isTrackedVestingTopic(s: string): s is TrackedVestingTopic {
+  return (TRACKED_VESTING_EVENT_TOPICS as readonly string[]).includes(s);
+}
+
+/**
+ * Resolve a raw topic name to an activity type, namespacing vesting events.
+ *
+ * `init` from the token contract and `init` from the vesting contract are
+ * different activities to a reader, so the vesting ones become
+ * `vesting:init`, `vesting:pause`, and so on. That keeps a single string key
+ * for the feed to switch on while leaving the six shared names unambiguous.
+ */
+export function resolveActivityType(
+  topic: string,
+  source: ActivitySource,
+): TokenActivityType {
+  if (source === "vesting") {
+    return isTrackedVestingTopic(topic) ? `vesting:${topic}` : "other";
+  }
+  return isTrackedTopic(topic) ? topic : "other";
 }
 
 /**
  * Decode a single raw event into a partial TokenActivityInfo.
  * Returns null for topics we don't recognise.
  */
-function decodeActivityEvent(
+export function decodeActivityEvent(
   topicStrings: string[],
   value: string | undefined,
   meta: { id: string; txHash: string; ledger: number; timestamp: string },
+  source: ActivitySource = "token",
 ): TokenActivityInfo | null {
   if (topicStrings.length === 0) return null;
   const topic0 = toScVal(topicStrings[0]);
@@ -1061,14 +1122,16 @@ function decodeActivityEvent(
     timestamp: meta.timestamp,
   };
 
-  if (isTrackedTopic(typePath)) {
-    base.type = typePath;
-  } else {
-    // Gracefully label unknowns instead of dropping them
-    base.type = "other";
-  }
+  // Keyed on (contract, topic): the same topic name means different things
+  // depending on which contract emitted it.
+  base.type = resolveActivityType(typePath, source);
 
   const data = toScVal(value);
+
+  if (source === "vesting") {
+    decodeVestingPayload(base, typePath, topicStrings, data);
+    return base;
+  }
 
   switch (typePath) {
     case "mint": {
@@ -1114,7 +1177,7 @@ function decodeActivityEvent(
     case "freeze":
     case "unfreeze":
     case "authorize":
-    case "rvk_auth": {
+    case "rev_auth": {
       // topic[1] = account address being acted on
       if (topicStrings.length > 1) {
         const addrVal = toScVal(topicStrings[1]);
@@ -1150,6 +1213,7 @@ function decodeActivityEvent(
     case "approve":
     case "set_max_b":
     case "set_cnode":
+    case "cncl_adm":
     case "upd_uri":
     case "set_areq":
     case "rvk_rvc":
@@ -1160,6 +1224,85 @@ function decodeActivityEvent(
   }
 
   return base;
+}
+
+/**
+ * Fill in the address and amount columns for a vesting-contract event.
+ *
+ * Topic and data shapes come from `docs/events.json`, the checked-in fixture
+ * the vesting contract's own drift test asserts against.
+ */
+function decodeVestingPayload(
+  base: TokenActivityInfo,
+  topic: string,
+  topicStrings: string[],
+  data: StellarSdk.xdr.ScVal | null,
+): void {
+  /** `create`, `release`, `revoke` and `clf_ext` carry the recipient at topic 1. */
+  const readRecipient = () => {
+    if (topicStrings.length > 1) {
+      const recipient = toScVal(topicStrings[1]);
+      if (recipient) base.subject = decodeAddress(recipient);
+    }
+  };
+
+  switch (topic) {
+    case "create":
+    case "release": {
+      readRecipient();
+      if (data) base.amount = decodeI128(data);
+      break;
+    }
+    case "revoke": {
+      // data is (releasable, unvested); the releasable half is what the
+      // recipient still receives, so that is the figure worth showing.
+      readRecipient();
+      if (data) base.amount = decodeFirstI128OfTuple(data);
+      break;
+    }
+    case "clf_ext": {
+      // data is (old_cliff, new_cliff) — ledger numbers, not an amount.
+      readRecipient();
+      break;
+    }
+    case "batch": {
+      // data is (created_count, total_amount).
+      if (data) base.amount = decodeSecondI128OfTuple(data);
+      break;
+    }
+    case "prune": {
+      if (data) base.subject = decodeAddress(data);
+      break;
+    }
+    case "prop_adm":
+    case "acc_adm": {
+      if (data) base.to = decodeAddress(data);
+      break;
+    }
+    default:
+      // init, pause, unpause, upgrade, revoked carry nothing the feed shows.
+      break;
+  }
+}
+
+/** First element of an ScVal tuple, as an i128 string; "-" if not shaped so. */
+function decodeFirstI128OfTuple(data: StellarSdk.xdr.ScVal): string {
+  return decodeI128OfTupleAt(data, 0);
+}
+
+/** Second element of an ScVal tuple, as an i128 string; "-" if not shaped so. */
+function decodeSecondI128OfTuple(data: StellarSdk.xdr.ScVal): string {
+  return decodeI128OfTupleAt(data, 1);
+}
+
+function decodeI128OfTupleAt(data: StellarSdk.xdr.ScVal, index: number): string {
+  try {
+    const vec = data.vec();
+    const element = vec?.[index];
+    return element ? decodeI128(element) : "-";
+  } catch {
+    return "-";
+  }
 }
 
 export async function fetchTransactionHistory(
@@ -1234,7 +1377,10 @@ export async function fetchTransactionHistory(
   return { items: items.reverse(), nextCursor };
 }
 
-export type TokenActivityType = (typeof TRACKED_EVENT_TOPICS)[number] | "other";
+export type TokenActivityType =
+  | (typeof TRACKED_EVENT_TOPICS)[number]
+  | `vesting:${(typeof TRACKED_VESTING_EVENT_TOPICS)[number]}`
+  | "other";
 
 export interface TokenActivityInfo {
   id: string;

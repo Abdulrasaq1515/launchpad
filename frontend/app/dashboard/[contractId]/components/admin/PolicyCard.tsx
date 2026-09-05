@@ -23,6 +23,7 @@ import {
 export function PolicyCard({
   admin,
   disabled,
+  locked,
   whaleCap,
   complianceNode,
   onWhaleCapChanged,
@@ -30,11 +31,20 @@ export function PolicyCard({
 }: {
   admin: UseAdminActionResult;
   disabled: boolean;
+  /** `revoke_admin` was called — the whale cap is no longer enforced. */
+  locked: boolean;
   whaleCap: number | null;
   complianceNode: string | null;
   onWhaleCapChanged: () => void;
   onComplianceNodeChanged: () => void;
 }) {
+  /**
+   * Once admin is revoked the cap getter returns `None` and, more to the
+   * point, the cap stops being enforced. So a stored percentage must be
+   * presented as inactive, not as an active limit holders can rely on.
+   */
+  const capIsActive = !locked && whaleCap !== null;
+  const capEnabled = whaleCap !== null;
   const whaleForm = useForm<WhaleCapData>({
     resolver: zodResolver(whaleCapSchema),
   });
@@ -74,12 +84,39 @@ export function PolicyCard({
                 percentage of the total supply.
               </p>
             </div>
-            <div className="text-xs text-stellar-200 bg-white/5 px-3 py-2 rounded-lg border border-white/10 flex items-center justify-between">
+            <div
+              className={
+                "text-xs px-3 py-2 rounded-lg border flex items-center justify-between " +
+                (locked
+                  ? "text-gray-400 bg-white/5 border-yellow-500/20"
+                  : "text-stellar-200 bg-white/5 border-white/10")
+              }
+            >
               <span>Current Max Balance Cap:</span>
-              <span className="font-semibold text-stellar-400">
+              <span
+                className={
+                  "font-semibold " +
+                  (capIsActive ? "text-stellar-400" : "text-yellow-400")
+                }
+              >
                 {whaleCap !== null ? `${whaleCap}% of total supply` : "None"}
               </span>
             </div>
+            {locked && (
+              <div className="flex items-start gap-2 text-[10px] leading-relaxed text-yellow-400 bg-yellow-500/5 p-2.5 rounded-lg border border-yellow-500/10">
+                <AlertTriangle
+                  className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                  aria-hidden="true"
+                />
+                <span>
+                  {capEnabled
+                    ? `This cap is inactive. Revoking admin control turned it off, so a ` +
+                      `single holder can now accumulate past ${whaleCap}% of supply.`
+                    : "Whale protection is inactive. Revoking admin control means the " +
+                      "token can no longer enforce a per-account balance cap."}
+                </span>
+              </div>
+            )}
             <Input
               label="Percentage Cap (1-100)"
               type="number"
@@ -104,7 +141,7 @@ export function PolicyCard({
               variant="secondary"
               className="border-red-500/20 text-red-400 hover:border-red-500/40"
               isLoading={admin.loading === "disable-whale-cap"}
-              disabled={disabled || whaleCap === null}
+              disabled={disabled || !capEnabled}
               onClick={async () =>
                 afterWhaleCap(await admin.run("disable-whale-cap", {}))
               }

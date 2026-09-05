@@ -218,6 +218,7 @@ export function AdminPanel({
         <PolicyCard
           admin={admin}
           disabled={disabled}
+          locked={state.locked}
           whaleCap={state.whaleCap}
           complianceNode={state.complianceNode}
           onWhaleCapChanged={state.refreshWhaleCap}
