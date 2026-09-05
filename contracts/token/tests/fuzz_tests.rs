@@ -37,7 +37,7 @@
 
 use proptest::prelude::*;
 use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env, String};
-use soroban_token::{TokenContract, TokenContractClient};
+use soroban_token::{TokenContract, TokenContractClient, TokenError};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -55,7 +55,7 @@ fn setup_env() -> (Env, TokenContractClient<'static>, Address, Address, Address)
     let env = Env::default();
     env.mock_all_auths();
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
 
     let admin = Address::generate(&env);
@@ -86,7 +86,7 @@ fn setup_capped_env(
     let env = Env::default();
     env.mock_all_auths();
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
 
     let admin = Address::generate(&env);
@@ -342,45 +342,57 @@ proptest! {
 // ===========================================================================
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
 fn test_zero_amount_mint_rejected() {
     let (_, client, _, user, _) = setup_env();
-    client.mint(&user, &0i128);
+    assert_eq!(
+        client.try_mint(&user, &0i128),
+        Err(Ok(TokenError::InvalidAmount.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
 fn test_zero_amount_burn_rejected() {
     let (_, client, admin, _, _) = setup_env();
-    client.burn(&admin, &0i128);
+    assert_eq!(
+        client.try_burn(&admin, &0i128),
+        Err(Ok(TokenError::InvalidAmount.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
 fn test_zero_amount_transfer_rejected() {
     let (_, client, admin, user, _) = setup_env();
-    client.transfer(&admin, &user, &0i128);
+    assert_eq!(
+        client.try_transfer(&admin, &user, &0i128),
+        Err(Ok(TokenError::InvalidAmount.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
 fn test_negative_amount_mint_rejected() {
     let (_, client, _, user, _) = setup_env();
-    client.mint(&user, &-1i128);
+    assert_eq!(
+        client.try_mint(&user, &-1i128),
+        Err(Ok(TokenError::InvalidAmount.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
 fn test_negative_amount_burn_rejected() {
     let (_, client, admin, _, _) = setup_env();
-    client.burn(&admin, &-1i128);
+    assert_eq!(
+        client.try_burn(&admin, &-1i128),
+        Err(Ok(TokenError::InvalidAmount.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "amount must be positive")]
 fn test_negative_amount_transfer_rejected() {
     let (_, client, admin, user, _) = setup_env();
-    client.transfer(&admin, &user, &-1i128);
+    assert_eq!(
+        client.try_transfer(&admin, &user, &-1i128),
+        Err(Ok(TokenError::InvalidAmount.into()))
+    );
 }
 
 // ===========================================================================
@@ -393,7 +405,7 @@ fn test_mint_i128_overflow() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
@@ -417,30 +429,36 @@ fn test_mint_i128_overflow() {
 }
 
 #[test]
-#[should_panic(expected = "insufficient balance to burn")]
 fn test_burn_underflow_rejected() {
     let (_, client, _, user, _) = setup_env();
     // user has 0 balance — burning 1 must revert.
-    client.burn(&user, &1i128);
+    assert_eq!(
+        client.try_burn(&user, &1i128),
+        Err(Ok(TokenError::InsufficientBalance.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "insufficient balance")]
 fn test_transfer_underflow_rejected() {
     let (_, client, _, user1, user2) = setup_env();
     // user1 has 0 balance — transferring 1 must revert.
-    client.transfer(&user1, &user2, &1i128);
+    assert_eq!(
+        client.try_transfer(&user1, &user2, &1i128),
+        Err(Ok(TokenError::InsufficientBalance.into()))
+    );
 }
 
 #[test]
-#[should_panic(expected = "mint would exceed max_supply")]
 fn test_mint_exceeds_max_supply_rejected() {
     let initial = 5_000_000_000_i128;
     let cap = 10_000_000_000_i128;
     let (_, client, _, user) = setup_capped_env(initial, cap);
 
     // Remaining capacity is 500_0000000 — minting 1 more overflows the cap.
-    client.mint(&user, &(500_0000001i128));
+    assert_eq!(
+        client.try_mint(&user, &(500_0000001i128)),
+        Err(Ok(TokenError::ExceedsMaxSupply.into()))
+    );
 }
 
 // ===========================================================================
@@ -448,26 +466,28 @@ fn test_mint_exceeds_max_supply_rejected() {
 // ===========================================================================
 
 #[test]
-#[should_panic(expected = "decimals must be <= 18")]
 fn test_initialize_rejects_decimals_above_18() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
     let admin = Address::generate(&env);
 
-    client.initialize(
-        &admin,
-        &19u32,
-        &String::from_str(&env, "BadToken"),
-        &String::from_str(&env, "BAD"),
-        &0i128,
-        &None,
-        &false,
-        &false,
-        &None,
-        &None,
+    assert_eq!(
+        client.try_initialize(
+            &admin,
+            &19u32,
+            &String::from_str(&env, "BadToken"),
+            &String::from_str(&env, "BAD"),
+            &0i128,
+            &None,
+            &false,
+            &false,
+            &None,
+            &None,
+        ),
+        Err(Ok(TokenError::InvalidDecimals.into()))
     );
 }
 
@@ -476,7 +496,7 @@ fn test_initialize_accepts_decimals_at_boundary() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
     let admin = Address::generate(&env);
 
@@ -528,7 +548,7 @@ fn test_partial_transfer_from_succeeds_with_above_max_ttl_allowance() {
     // (6,312,000) cannot mask the regression.
     env.ledger().set_max_entry_ttl(MAINNET_MAX_ENTRY_TTL);
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
 
     let admin = Address::generate(&env);
@@ -576,7 +596,7 @@ fn test_partial_burn_from_succeeds_with_above_max_ttl_allowance() {
     // Same real-mainnet ceiling.
     env.ledger().set_max_entry_ttl(MAINNET_MAX_ENTRY_TTL);
 
-    let id = env.register_contract(None, TokenContract);
+    let id = env.register(TokenContract, ());
     let client = TokenContractClient::new(&env, &id);
 
     let admin = Address::generate(&env);

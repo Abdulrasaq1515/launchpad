@@ -48,6 +48,16 @@ pub enum VestingError {
     CliffAfterEnd = 16,
     /// `prune_recipient` called for a recipient that is not tracked.
     RecipientNotTracked = 17,
+    /// `cliff_ledger` is earlier than the current ledger.
+    CliffInPast = 18,
+    /// `total_amount` exceeds `MAX_VESTING_AMOUNT`.
+    ExceedsVestingLimit = 19,
+    /// The contract's token balance does not cover its committed schedules.
+    Underfunded = 20,
+    /// WASM hash supplied to `upgrade` is the all-zeros sentinel.
+    InvalidWasmHash = 21,
+    /// The contract is permanently locked (`revoke_admin` was called).
+    Locked = 22,
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +151,14 @@ pub struct Solvency {
 #[contract]
 pub struct VestingContract;
 
+// `env.events().publish(...)` is deprecated in soroban-sdk 27 in favour of
+// `#[contractevent]` structs. The emitted XDR is identical, so this is a source
+// -level migration only — but it rewrites every event site in the contract, and
+// the event topics/data are a published wire contract consumed by the frontend
+// activity feed, the indexer, docs/events.json and the topic-drift tests. It is
+// tracked separately rather than folded into the SDK upgrade so that a shape
+// change, if one slips in, is not buried in an unrelated diff.
+#[allow(deprecated)]
 #[contractimpl]
 impl VestingContract {
     // ── Initialization ──────────────────────────────────────────────────
@@ -211,15 +229,13 @@ impl VestingContract {
         Self::_check_paused(&env);
         let admin = Self::_require_admin(&env);
 
-        Self::_validate_total_amount(total_amount);
-        assert!(
-            cliff_ledger >= env.ledger().sequence(),
-            "cliff_ledger must not be in the past"
-        );
-        assert!(
-            end_ledger > cliff_ledger,
-            "end_ledger must be after cliff_ledger"
-        );
+        Self::_validate_total_amount(&env, total_amount);
+        if cliff_ledger < env.ledger().sequence() {
+            panic_with_error!(&env, VestingError::CliffInPast);
+        }
+        if end_ledger <= cliff_ledger {
+            panic_with_error!(&env, VestingError::InvalidLedgerRange);
+        }
 
         let schedule_index = Self::_schedule_count(&env, &recipient);
         let key = Self::_schedule_key(&recipient, schedule_index);
@@ -233,7 +249,7 @@ impl VestingContract {
 
         // Atomically transfer tokens from admin to this contract
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
-        token_client.transfer(&admin, &env.current_contract_address(), &total_amount);
+        token_client.transfer(&admin, env.current_contract_address(), &total_amount);
         Self::_increase_total_committed(&env, total_amount);
         Self::_assert_solvent(&env, &token_addr);
 
@@ -297,11 +313,10 @@ impl VestingContract {
         for i in 0..schedules.len() {
             let input = schedules.get(i).expect("index out of bounds");
 
-            Self::_validate_total_amount(input.total_amount);
-            assert!(
-                input.end_ledger > input.cliff_ledger,
-                "end_ledger must be after cliff_ledger"
-            );
+            Self::_validate_total_amount(&env, input.total_amount);
+            if input.end_ledger <= input.cliff_ledger {
+                panic_with_error!(&env, VestingError::InvalidLedgerRange);
+            }
 
             let schedule_index = next_indexes
                 .get(input.recipient.clone())
@@ -316,7 +331,7 @@ impl VestingContract {
 
         // Phase 2: Transfer total amount from admin to contract in one transaction
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
-        token_client.transfer(&admin, &env.current_contract_address(), &total_amount);
+        token_client.transfer(&admin, env.current_contract_address(), &total_amount);
         Self::_increase_total_committed(&env, total_amount);
         Self::_assert_solvent(&env, &token_addr);
 
@@ -500,15 +515,15 @@ impl VestingContract {
 
         let (key, mut schedule) = Self::_load_schedule(&env, &recipient, index);
 
-        assert!(!schedule.revoked, "schedule has been revoked");
-        assert!(
-            env.ledger().sequence() < schedule.cliff_ledger,
-            "cliff has already passed"
-        );
-        assert!(
-            new_cliff > schedule.cliff_ledger,
-            "new_cliff must be later than current cliff"
-        );
+        if schedule.revoked {
+            panic_with_error!(&env, VestingError::ScheduleRevoked);
+        }
+        if env.ledger().sequence() >= schedule.cliff_ledger {
+            panic_with_error!(&env, VestingError::CliffPassed);
+        }
+        if new_cliff <= schedule.cliff_ledger {
+            panic_with_error!(&env, VestingError::CliffNotExtended);
+        }
 
         // Shift end_ledger by the same delta so vesting duration is preserved
         let delta = new_cliff - schedule.cliff_ledger;
@@ -516,10 +531,9 @@ impl VestingContract {
         let old_end = schedule.end_ledger;
         let new_end = schedule.end_ledger + delta;
 
-        assert!(
-            new_cliff < new_end,
-            "new_cliff must be before the shifted end_ledger"
-        );
+        if new_cliff >= new_end {
+            panic_with_error!(&env, VestingError::CliffAfterEnd);
+        }
 
         schedule.cliff_ledger = new_cliff;
         schedule.end_ledger = new_end;
@@ -557,7 +571,7 @@ impl VestingContract {
             .storage()
             .instance()
             .get(&DataKey::TokenContract)
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, VestingError::NotInitialized));
         let total_committed = Self::_total_committed(&env);
         let token_balance = Self::_token_balance(&env, &token_addr);
 
@@ -596,10 +610,9 @@ impl VestingContract {
     /// new WASM must remain storage-compatible with previous deployments.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
         Self::_require_admin(&env);
-        assert!(
-            new_wasm_hash != BytesN::from_array(&env, &[0; 32]),
-            "invalid wasm hash"
-        );
+        if new_wasm_hash == BytesN::from_array(&env, &[0; 32]) {
+            panic_with_error!(&env, VestingError::InvalidWasmHash);
+        }
         env.deployer()
             .update_current_contract_wasm(new_wasm_hash.clone());
         env.events()
@@ -649,6 +662,11 @@ impl VestingContract {
 
     /// Returns the admin address of this vesting contract.
     pub fn get_admin(env: Env) -> Address {
+        // Distinguish "never initialized" from "admin deliberately revoked":
+        // both leave the Admin key absent, but they mean opposite things to a
+        // caller, and reporting NotInitialized for a locked contract is simply
+        // wrong.
+        Self::_require_not_locked(&env);
         env.storage()
             .instance()
             .get(&DataKey::Admin)
@@ -846,13 +864,15 @@ impl VestingContract {
             }
         }
 
-        assert!(total_releasable > 0, "nothing to release");
+        if total_releasable <= 0 {
+            panic_with_error!(&env, VestingError::NothingToRelease);
+        }
 
         let token_addr: Address = env
             .storage()
             .instance()
             .get(&DataKey::TokenContract)
-            .expect("not initialized");
+            .unwrap_or_else(|| panic_with_error!(&env, VestingError::NotInitialized));
 
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
         token_client.transfer(
@@ -887,7 +907,7 @@ impl VestingContract {
             .get(&DataKey::Locked)
             .unwrap_or(false);
         if locked {
-            panic!("admin revoked: contract is locked");
+            panic_with_error!(env, VestingError::Locked);
         }
     }
 
@@ -902,12 +922,13 @@ impl VestingContract {
         }
     }
 
-    fn _validate_total_amount(total_amount: i128) {
-        assert!(total_amount > 0, "total_amount must be positive");
-        assert!(
-            total_amount <= MAX_VESTING_AMOUNT,
-            "total_amount exceeds vesting limit"
-        );
+    fn _validate_total_amount(env: &Env, total_amount: i128) {
+        if total_amount <= 0 {
+            panic_with_error!(env, VestingError::InvalidAmount);
+        }
+        if total_amount > MAX_VESTING_AMOUNT {
+            panic_with_error!(env, VestingError::ExceedsVestingLimit);
+        }
     }
 
     fn _schedule_key(recipient: &Address, index: u32) -> DataKey {
@@ -957,10 +978,9 @@ impl VestingContract {
     }
 
     fn _assert_solvent(env: &Env, token_addr: &Address) {
-        assert!(
-            Self::_token_balance(env, token_addr) >= Self::_total_committed(env),
-            "vesting contract underfunded"
-        );
+        if Self::_token_balance(env, token_addr) < Self::_total_committed(env) {
+            panic_with_error!(env, VestingError::Underfunded);
+        }
     }
 
     fn _resolve_schedule_index(env: &Env, recipient: &Address, index: Option<u32>) -> u32 {
@@ -1144,12 +1164,11 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "cliff_ledger must not be in the past")]
     fn test_create_schedule_past_cliff_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1164,7 +1183,10 @@ mod test {
         env.ledger().set_sequence_number(100);
 
         // Attempt to pass a cliff_ledger (50) that is before current ledger (100)
-        client.create_schedule(&recipient, &1000, &50, &200);
+        assert_eq!(
+            client.try_create_schedule(&recipient, &1000, &50, &200),
+            Err(Ok(VestingError::CliffInPast.into()))
+        );
     }
 
     // ── TTL constant tests ──────────────────────────────────────────────
@@ -1174,7 +1196,7 @@ mod test {
         // See the token contract's equivalent test for why this asserts a
         // relationship rather than a network figure (#398).
         let env = Env::default();
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
 
         env.as_contract(&contract_id, || {
             let network_max = env.storage().max_ttl();
@@ -1299,7 +1321,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1312,7 +1334,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1329,7 +1351,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1346,7 +1368,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1373,13 +1395,15 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let recipient = Address::generate(&env);
         let other = Address::generate(&env);
-        let token_addr = env.register_stellar_asset_contract(admin.clone());
+        let token_addr = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
         let asset_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_addr);
 
@@ -1419,12 +1443,14 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let recipient = Address::generate(&env);
-        let token_addr = env.register_stellar_asset_contract(admin.clone());
+        let token_addr = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
         let asset_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_addr);
 
@@ -1447,18 +1473,19 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "vesting contract underfunded")]
     fn test_create_schedule_rejects_when_existing_commitments_are_underfunded() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let recipient = Address::generate(&env);
         let other = Address::generate(&env);
-        let token_addr = env.register_stellar_asset_contract(admin.clone());
+        let token_addr = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
         let asset_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_addr);
 
@@ -1467,7 +1494,10 @@ mod test {
         client.create_schedule(&recipient, &1_000, &100, &200);
         token_client.transfer(&contract_id, &admin, &400);
 
-        client.create_schedule(&other, &100, &100, &200);
+        assert_eq!(
+            client.try_create_schedule(&other, &100, &100, &200),
+            Err(Ok(VestingError::Underfunded.into()))
+        );
     }
 
     #[test]
@@ -1475,7 +1505,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1488,7 +1518,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1522,9 +1552,10 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "total_amount exceeds vesting limit")]
+    #[should_panic] // ExceedsVestingLimit; raised outside a contract invocation
     fn test_total_amount_above_vesting_limit_is_rejected() {
-        VestingContract::_validate_total_amount(MAX_VESTING_AMOUNT + 1);
+        let env = Env::default();
+        VestingContract::_validate_total_amount(&env, MAX_VESTING_AMOUNT + 1);
     }
 
     #[test]
@@ -1532,7 +1563,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1554,7 +1585,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1573,7 +1604,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1606,7 +1637,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1637,7 +1668,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1668,7 +1699,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1702,7 +1733,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1730,7 +1761,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -1762,7 +1793,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1781,7 +1812,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1795,12 +1826,18 @@ mod test {
     #[test]
     fn test_revoke_non_admin_panics() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, VestingContract);
+        // Auth has to be mocked for setup, or `initialize` fails first and the
+        // test passes for the wrong reason.
+        env.mock_all_auths();
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let recipient = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
+
+        // Now drop the blanket mock so the admin check actually has to hold.
+        env.set_auths(&[]);
         assert!(client.try_revoke(&recipient, &latest_index()).is_err());
     }
 
@@ -1811,32 +1848,31 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
         // Cliff is at 100; extend it to 150 while current ledger is still 0
         extend_cliff_latest(&client, &recipient, 150u32);
 
-        let schedule = get_schedule_latest(&client, &recipient);
-        assert_eq!(schedule.cliff_ledger, 150);
-        assert_eq!(schedule.end_ledger, 250); // shifted by same delta (+50)
-
-        // Verify event emission contains (old_cliff, new_cliff, old_end, new_end)
+        // Read the events straight away: `all()` covers only the most recent
+        // invocation, so any getter called first would clear this list.
         use soroban_sdk::IntoVal;
-        let events = env.events().all();
-        let last_event = events.slice(events.len() - 1..);
         assert_eq!(
-            last_event,
+            env.events().all(),
             soroban_sdk::vec![
                 &env,
                 (
                     contract_id,
-                    (symbol_short!("clf_ext"), recipient).into_val(&env),
+                    (symbol_short!("clf_ext"), recipient.clone()).into_val(&env),
                     (100u32, 150u32, 200u32, 250u32).into_val(&env)
                 )
             ]
         );
+
+        let schedule = get_schedule_latest(&client, &recipient);
+        assert_eq!(schedule.cliff_ledger, 150);
+        assert_eq!(schedule.end_ledger, 250); // shifted by same delta (+50)
     }
 
     #[test]
@@ -1844,7 +1880,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1881,12 +1917,11 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "new_cliff must be later than current cliff")]
     fn test_extend_cliff_cannot_reduce() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1902,7 +1937,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1918,7 +1953,7 @@ mod test {
     fn test_extend_cliff_non_admin_panics() {
         let env = Env::default();
         // Do NOT mock all auths — only mock nothing so admin auth fails
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let token = env
@@ -1945,7 +1980,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -1961,7 +1996,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
         let (client, admin, recipient) = (
-            VestingContractClient::new(&env, &env.register_contract(None, VestingContract)),
+            VestingContractClient::new(&env, &env.register(VestingContract, ())),
             Address::generate(&env),
             Address::generate(&env),
         );
@@ -1977,7 +2012,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2041,7 +2076,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2076,7 +2111,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2111,7 +2146,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2133,7 +2168,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2163,7 +2198,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2193,7 +2228,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2238,7 +2273,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2276,7 +2311,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2323,7 +2358,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2363,7 +2398,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2395,7 +2430,7 @@ mod test {
     #[should_panic]
     fn test_initialize_unauthorized() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
@@ -2407,7 +2442,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2422,7 +2457,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2430,7 +2465,10 @@ mod test {
         client.initialize(&admin, &token);
 
         let zero_hash = BytesN::from_array(&env, &[0; 32]);
-        client.upgrade(&zero_hash);
+        assert_eq!(
+            client.try_upgrade(&zero_hash),
+            Err(Ok(VestingError::InvalidWasmHash.into()))
+        );
     }
 
     #[test]
@@ -2438,17 +2476,23 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
 
-        let non_zero_hash = BytesN::from_array(&env, &[1; 32]);
-        client.upgrade(&non_zero_hash);
+        // A hash that was never uploaded must not be accepted. This test used
+        // to call `upgrade` with [1; 32] and then assert the contract "still
+        // worked", which it did only because nothing was ever replaced — the
+        // upgrade was a no-op on a nonexistent wasm. The host now rejects it,
+        // which is the behaviour worth pinning: a bogus hash cannot silently
+        // succeed and leave the admin believing the contract was upgraded.
+        let never_uploaded = BytesN::from_array(&env, &[1; 32]);
+        assert!(client.try_upgrade(&never_uploaded).is_err());
 
-        // Verify the contract is still functional after upgrade
+        // The contract is untouched and still usable.
         assert_eq!(client.get_admin(), admin);
     }
 
@@ -2456,7 +2500,7 @@ mod test {
     #[should_panic]
     fn test_non_admin_cannot_upgrade() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2485,7 +2529,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2498,28 +2542,26 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked")]
     fn test_admin_getter_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
         client.revoke_admin();
-        let _ = client.get_admin();
+        assert_eq!(client.try_get_admin(), Err(Ok(VestingError::Locked.into())));
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_create_schedule_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2528,32 +2570,36 @@ mod test {
         client.revoke_admin();
 
         let recipient = Address::generate(&env);
-        client.create_schedule(&recipient, &1000, &100, &200);
+        assert_eq!(
+            client.try_create_schedule(&recipient, &1000, &100, &200),
+            Err(Ok(VestingError::Locked.into()))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_revoke_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
         client.revoke_admin();
-        client.revoke_admin();
+        assert_eq!(
+            client.try_revoke_admin(),
+            Err(Ok(VestingError::Locked.into()))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_upgrade_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2562,76 +2608,80 @@ mod test {
         client.revoke_admin();
 
         let non_zero_hash = BytesN::from_array(&env, &[1; 32]);
-        client.upgrade(&non_zero_hash);
+        assert_eq!(
+            client.try_upgrade(&non_zero_hash),
+            Err(Ok(VestingError::Locked.into()))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_extend_cliff_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
         client.revoke_admin();
-        extend_cliff_latest(&client, &recipient, 150u32);
+        assert_eq!(
+            client.try_extend_cliff(&recipient, &150u32, &latest_index()),
+            Err(Ok(VestingError::Locked.into()))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_prune_recipient_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
         client.revoke_admin();
-        client.prune_recipient(&recipient);
+        assert_eq!(
+            client.try_prune_recipient(&recipient),
+            Err(Ok(VestingError::Locked.into()))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_pause_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
         client.revoke_admin();
-        client.pause();
+        assert_eq!(client.try_pause(), Err(Ok(VestingError::Locked.into())));
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_unpause_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
         client.revoke_admin();
-        client.unpause();
+        assert_eq!(client.try_unpause(), Err(Ok(VestingError::Locked.into())));
     }
 
     #[test]
-    #[should_panic(expected = "admin revoked: contract is locked")]
     fn test_propose_admin_after_revoke_panics() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2640,7 +2690,10 @@ mod test {
         client.revoke_admin();
 
         let other = Address::generate(&env);
-        client.propose_admin(&other);
+        assert_eq!(
+            client.try_propose_admin(&other),
+            Err(Ok(VestingError::Locked.into()))
+        );
     }
 
     #[test]
@@ -2648,12 +2701,14 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let recipient = Address::generate(&env);
-        let token_addr = env.register_stellar_asset_contract(admin.clone());
+        let token_addr = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
         let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
         let asset_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_addr);
 
@@ -2674,7 +2729,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
         let (_, recipient) = setup_schedule(&env, &client);
 
@@ -2692,29 +2747,23 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
         let token = Address::generate(&env);
         client.initialize(&admin, &token);
 
-        let non_zero_hash = BytesN::from_array(&env, &[0xAB; 32]);
-        client.upgrade(&non_zero_hash);
-
-        let events = env.events().all();
-        let last_event = events.slice(events.len() - 1..);
-        assert_eq!(
-            last_event,
-            soroban_sdk::vec![
-                &env,
-                (
-                    contract_id,
-                    (symbol_short!("upgrade"),).into_val(&env),
-                    non_zero_hash.into_val(&env)
-                )
-            ]
-        );
+        // An `upgrade` that fails emits nothing: the host discards the events
+        // of a failed call, so a rejected hash cannot leave an `upgrade` event
+        // behind claiming the contract was replaced.
+        //
+        // The success path cannot be exercised here — it needs a wasm actually
+        // uploaded to the host, which a unit test has no build artifact for. It
+        // is covered end to end against testnet in docs/deploy.md instead.
+        let never_uploaded = BytesN::from_array(&env, &[0xAB; 32]);
+        assert!(client.try_upgrade(&never_uploaded).is_err());
+        assert_eq!(env.events().all().events().len(), 0);
     }
 
     #[test]
@@ -2722,7 +2771,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2731,10 +2780,10 @@ mod test {
 
         client.revoke_admin();
 
-        let events = env.events().all();
-        let last_event = events.slice(events.len() - 1..);
+        // `all()` returns only the events of the last invocation, so this is
+        // that invocation's complete event list.
         assert_eq!(
-            last_event,
+            env.events().all(),
             soroban_sdk::vec![
                 &env,
                 (
@@ -2752,7 +2801,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2769,7 +2818,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2786,7 +2835,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2815,7 +2864,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2843,7 +2892,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2876,7 +2925,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2906,7 +2955,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2937,7 +2986,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -2979,7 +3028,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, VestingContract);
+        let contract_id = env.register(VestingContract, ());
         let client = VestingContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);

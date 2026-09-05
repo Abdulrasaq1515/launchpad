@@ -17,9 +17,10 @@ use soroban_sdk::{
 /// and broke fat LTO. The signature must stay in step with
 /// `TokenContract::initialize`; `factory_initializes_token_with_full_config`
 /// exercises the real token contract through this client and fails if it drifts.
-#[allow(clippy::too_many_arguments)]
+// Arity mirrors the token contract's public `initialize` ABI.
 #[contractclient(name = "TokenClient")]
 pub trait TokenInterface {
+    #[allow(clippy::too_many_arguments)]
     fn initialize(
         env: Env,
         admin: Address,
@@ -121,6 +122,14 @@ pub enum FactoryError {
 #[contract]
 pub struct FactoryContract;
 
+// `env.events().publish(...)` is deprecated in soroban-sdk 27 in favour of
+// `#[contractevent]` structs. The emitted XDR is identical, so this is a source
+// -level migration only — but it rewrites every event site in the contract, and
+// the event topics/data are a published wire contract consumed by the frontend
+// activity feed, the indexer, docs/events.json and the topic-drift tests. It is
+// tracked separately rather than folded into the SDK upgrade so that a shape
+// change, if one slips in, is not buried in an unrelated diff.
+#[allow(deprecated)]
 #[contractimpl]
 impl FactoryContract {
     // ── Administration ──────────────────────────────────────────────────
@@ -225,7 +234,7 @@ impl FactoryContract {
         let token_address = env
             .deployer()
             .with_address(deployer.clone(), salt.clone())
-            .deploy(wasm_hash);
+            .deploy_v2(wasm_hash, ());
 
         #[cfg(test)]
         let token_address = env
@@ -377,7 +386,7 @@ mod test {
     use super::*;
     use soroban_sdk::{
         testutils::{Address as _, Events as _, MockAuth, MockAuthInvoke},
-        Env, IntoVal, Symbol, TryFromVal,
+        Env, IntoVal,
     };
 
     // ── Event topic fixture ─────────────────────────────────────────────
@@ -440,7 +449,7 @@ mod test {
     // ── Shared setup ────────────────────────────────────────────────────
 
     fn setup(env: &Env) -> (Address, FactoryContractClient<'static>, Address) {
-        let contract_id = env.register_contract(None, FactoryContract);
+        let contract_id = env.register(FactoryContract, ());
         let client = FactoryContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
         client.initialize(&admin);
@@ -479,7 +488,7 @@ mod test {
             .deployer()
             .with_address(deployer.clone(), salt.clone())
             .deployed_address();
-        env.register_contract(&Some(address.clone()), soroban_token::TokenContract);
+        env.register_at(&address, soroban_token::TokenContract, ());
         address
     }
 
@@ -588,6 +597,24 @@ mod test {
 
         let token_address = deploy_token(&env, &client, &deployer, &salt, &admin);
 
+        // Assert the event first: `all()` covers only the most recent
+        // invocation, and every getter below is an invocation, so checking it
+        // at the end of the test would read an empty list.
+        //
+        // The token's own `init` and `mint` events are emitted by the token
+        // contract, so this list holds just the factory's `deploy`.
+        assert_eq!(
+            env.events().all().filter_by_contract(&client.address),
+            soroban_sdk::vec![
+                &env,
+                (
+                    client.address.clone(),
+                    (symbol_short!("deploy"), deployer.clone(), salt.clone()).into_val(&env),
+                    token_address.clone().into_val(&env)
+                )
+            ]
+        );
+
         // Deterministic address derived from deployer + salt.
         let expected = env
             .deployer()
@@ -608,21 +635,6 @@ mod test {
         let page = client.get_deployments_paginated(&0u32, &10u32);
         assert_eq!(page.len(), 1);
         assert_eq!(page.get(0).unwrap(), token_address.clone());
-
-        // Emitted a `deploy` event carrying deployer, salt and token address.
-        let events = env.events().all();
-        let last_event = events.slice(events.len() - 1..);
-        assert_eq!(
-            last_event,
-            soroban_sdk::vec![
-                &env,
-                (
-                    client.address.clone(),
-                    (symbol_short!("deploy"), deployer, salt).into_val(&env),
-                    token_address.into_val(&env)
-                )
-            ]
-        );
     }
 
     #[test]
@@ -714,15 +726,21 @@ mod test {
         // ...and no `deploy` event was emitted — `_finalize_deployment`
         // reverted along with the failed initialize instead of recording a
         // half-initialized token.
-        let events = env.events().all();
-        let mut deploy_events = 0;
-        for i in 0..events.len() {
-            let (_, topic, _) = events.get(i).unwrap();
-            let topic_0: Symbol = TryFromVal::try_from_val(&env, &topic.get(0).unwrap()).unwrap();
-            if topic_0 == symbol_short!("deploy") {
-                deploy_events += 1;
-            }
-        }
+        // `all()` hands back xdr events now, so match the topic there rather
+        // than round-tripping each one through a Val.
+        use soroban_sdk::xdr::{ContractEventBody, ScVal};
+        let all = env.events().all();
+        let deploy_events = all
+            .events()
+            .iter()
+            .filter(|e| {
+                let ContractEventBody::V0(body) = &e.body;
+                matches!(
+                    body.topics.first(),
+                    Some(ScVal::Symbol(s)) if s.0.as_slice() == b"deploy"
+                )
+            })
+            .count();
         assert_eq!(deploy_events, 0);
     }
 

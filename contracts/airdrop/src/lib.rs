@@ -143,6 +143,14 @@ pub enum DataKey {
 #[contract]
 pub struct AirdropContract;
 
+// `env.events().publish(...)` is deprecated in soroban-sdk 27 in favour of
+// `#[contractevent]` structs. The emitted XDR is identical, so this is a source
+// -level migration only — but it rewrites every event site in the contract, and
+// the event topics/data are a published wire contract consumed by the frontend
+// activity feed, the indexer, docs/events.json and the topic-drift tests. It is
+// tracked separately rather than folded into the SDK upgrade so that a shape
+// change, if one slips in, is not buried in an unrelated diff.
+#[allow(deprecated)]
 #[contractimpl]
 impl AirdropContract {
     /// Publish an airdrop: the token being distributed, the admin who funds
@@ -200,7 +208,7 @@ impl AirdropContract {
         let token_addr = Self::_token(&env);
         token::Client::new(&env, &token_addr).transfer(
             &from,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &amount,
         );
 
@@ -629,7 +637,7 @@ mod test {
 
         let root = root_of(&env, &leaves);
 
-        let contract_id = env.register_contract(None, AirdropContract);
+        let contract_id = env.register(AirdropContract, ());
         let client = AirdropContractClient::new(&env, &contract_id);
         client.initialize(&token, &admin, &root, &DEADLINE);
 
@@ -686,7 +694,7 @@ mod test {
         let token = env
             .register_stellar_asset_contract_v2(admin.clone())
             .address();
-        let contract_id = env.register_contract(None, AirdropContract);
+        let contract_id = env.register(AirdropContract, ());
         let client = AirdropContractClient::new(&env, &contract_id);
         let root = BytesN::from_array(&env, &[7u8; 32]);
 
@@ -701,7 +709,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, AirdropContract);
+        let contract_id = env.register(AirdropContract, ());
         let client = AirdropContractClient::new(&env, &contract_id);
         let who = Address::generate(&env);
 
@@ -1026,7 +1034,7 @@ mod test {
             "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ",
         ));
 
-        let contract_id = env.register_contract(None, AirdropContract);
+        let contract_id = env.register(AirdropContract, ());
         let client = AirdropContractClient::new(&env, &contract_id);
 
         let expected = BytesN::from_array(
@@ -1056,7 +1064,7 @@ mod test {
         let token = env
             .register_stellar_asset_contract_v2(admin.clone())
             .address();
-        let contract_id = env.register_contract(None, AirdropContract);
+        let contract_id = env.register(AirdropContract, ());
         let client = AirdropContractClient::new(&env, &contract_id);
         let root = BytesN::from_array(&env, &[1u8; 32]);
 
