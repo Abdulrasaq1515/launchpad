@@ -258,7 +258,8 @@
       "backToHome": "Back to Home",
       "viewOnExplorer": "View on Explorer",
       "footerNote": "If you believe this is a valid token contract, please check the contract ID and try again."
-    }
+    },
+    "immutable": "Immutable"
   },
   "claim": {
     "title": "Claim Vesting",

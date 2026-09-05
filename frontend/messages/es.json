@@ -258,7 +258,8 @@
       "backToHome": "Volver al Inicio",
       "viewOnExplorer": "Ver en Explorador",
       "footerNote": "Si crees que este es un contrato de token válido, por favor verifica el ID del contrato e inténtalo de nuevo."
-    }
+    },
+    "immutable": "Inmutable"
   },
   "claim": {
     "title": "Reclamar Vesting",

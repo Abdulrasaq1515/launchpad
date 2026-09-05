@@ -10,6 +10,10 @@ import PublicTokenPage from "./PublicTokenPage";
 // triggering a fresh RPC round-trip.
 export const revalidate = 60;
 
+// Note: metadata below deliberately distinguishes "this is not a token" from
+// "we could not reach the network", because this cache would otherwise pin a
+// transient RPC failure to the page for a minute.
+
 interface PageProps {
   params: Promise<{ network: string; contractId: string }>;
 }
@@ -37,7 +41,11 @@ export async function generateMetadata({
     // SEP-41 compliance check (on-chain) before fetching full token info.
     const validation = await validateTokenContract(contractId, NETWORKS[resolvedNetwork]);
 
-    if (!validation.isValid) {
+    // Only claim a contract is invalid when we actually determined that. A
+    // probe that could not reach the network falls through to the neutral
+    // fallback below instead of publishing "not a SEP-41 token" — which, with
+    // `revalidate = 60`, would be cached and served to crawlers.
+    if (!validation.isValid && validation.reachable) {
       // Return fallback metadata for invalid contracts
       return {
         title: `Invalid Token Contract — ${contractId.slice(0, 8)}... | SoroPad`,

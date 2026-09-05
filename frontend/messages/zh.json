@@ -258,7 +258,8 @@
       "backToHome": "返回首页",
       "viewOnExplorer": "在浏览器中查看",
       "footerNote": "如果您认为这是有效的代币合约，请检查合约 ID 后重试。"
-    }
+    },
+    "immutable": "不可变"
   },
   "claim": {
     "title": "领取归属",

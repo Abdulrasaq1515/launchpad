@@ -210,12 +210,33 @@ export function classifyRpcError(err: unknown): RpcErrorInfo {
     }
   }
 
+  // Node throws AggregateError when every address for a host fails (IPv6 then
+  // IPv4, say). Its own `message` is empty, so classifying it directly always
+  // yielded "unknown" — classify by the first nested error instead.
+  if (err instanceof AggregateError && Array.isArray(err.errors) && err.errors.length) {
+    return classifyRpcError(err.errors[0]);
+  }
+
   // Plain Error: scrape the message for status hints
   if (err instanceof Error) {
     const msg = err.message;
 
-    // Status code embedded in message: "504", "HTTP 504", etc.
-    const statusMatch = msg.match(/\b(4\d\d|5\d\d)\b/);
+    // Connection-level failures first. A bare three-digit scrape would read the
+    // 443 in "connect ETIMEDOUT 1.2.3.4:443" as an HTTP status — and since 443
+    // is the port on essentially every RPC endpoint, that misclassified every
+    // connection error as a client error.
+    if (/ETIMEDOUT|ENETUNREACH|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ENOTFOUND/i.test(msg)) {
+      return {
+        kind: /ETIMEDOUT/i.test(msg) ? "timeout" : "network",
+        title: "Network unreachable",
+        message: "Could not reach the Soroban RPC endpoint.",
+      };
+    }
+
+    // Status code embedded in message: "504", "HTTP 504", "status: 429".
+    // The lookaround rejects a number that is part of a host:port pair or an
+    // IPv4 octet, so "connect ETIMEDOUT 1.2.3.4:443" is not read as a 443.
+    const statusMatch = msg.match(/(?<![:.\d])(4\d\d|5\d\d)(?![.\d])/);
     if (statusMatch) {
       return classifyByStatus(parseInt(statusMatch[1], 10), msg);
     }

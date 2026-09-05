@@ -1,7 +1,7 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { type NetworkConfig } from "../types/network";
 import { fetchIndexedEvents } from "./indexer";
-import { wrapRpcCall } from "./soroban";
+import { wrapRpcCall, classifyRpcError } from "./soroban";
 import { buildRevokeAllowanceArgs } from "./transactionSimulator";
 
 // ---------------------------------------------------------------------------
@@ -460,10 +460,37 @@ function toU32ScVal(value: number): StellarSdk.xdr.ScVal {
  * This function attempts to call the required SEP-41 methods to verify
  * that the contract is a valid token contract.
  */
+/**
+ * Outcome of a SEP-41 compliance probe.
+ *
+ * `reachable` is what separates "this contract is not a token" from "we could
+ * not find out". Only the former should ever be shown to a user as a verdict.
+ */
+export interface TokenValidation {
+  isValid: boolean;
+  reachable: boolean;
+  error?: string;
+}
+
 export async function validateTokenContract(
   contractId: string,
   config: NetworkConfig,
-): Promise<{ isValid: boolean; error?: string }> {
+): Promise<TokenValidation> {
+  /**
+   * A probe that failed because the RPC was unreachable says nothing about the
+   * contract. Treating the two the same made a transient network blip render a
+   * perfectly good token as "Invalid Token Contract" — and, on the SSR page,
+   * cache that claim for a minute.
+   */
+  const unreachable = (results: PromiseSettledResult<unknown>[]) =>
+    results.some(
+      (r) =>
+        r.status === "rejected" &&
+        ["timeout", "network", "rate_limit", "server"].includes(
+          classifyRpcError(r.reason).kind,
+        ),
+    );
+
   try {
     // Try to call the required SEP-41 methods
     const [nameResult, symbolResult, decimalsResult] = await Promise.allSettled(
@@ -474,10 +501,19 @@ export async function validateTokenContract(
       ],
     );
 
+    if (unreachable([nameResult, symbolResult, decimalsResult])) {
+      return {
+        isValid: false,
+        reachable: false,
+        error: "Could not reach the network to check this contract.",
+      };
+    }
+
     // Check if all required methods are available
     if (nameResult.status === "rejected") {
       return {
         isValid: false,
+        reachable: true,
         error: "Contract does not implement 'name()' method",
       };
     }
@@ -485,6 +521,7 @@ export async function validateTokenContract(
     if (symbolResult.status === "rejected") {
       return {
         isValid: false,
+        reachable: true,
         error: "Contract does not implement 'symbol()' method",
       };
     }
@@ -492,6 +529,7 @@ export async function validateTokenContract(
     if (decimalsResult.status === "rejected") {
       return {
         isValid: false,
+        reachable: true,
         error: "Contract does not implement 'decimals()' method",
       };
     }
@@ -504,6 +542,7 @@ export async function validateTokenContract(
     } catch {
       return {
         isValid: false,
+        reachable: true,
         error: "Contract methods return invalid data types",
       };
     }
@@ -522,16 +561,25 @@ export async function validateTokenContract(
       balanceResult.status === "rejected" &&
       totalSupplyResult.status === "rejected"
     ) {
+      if (unreachable([balanceResult, totalSupplyResult])) {
+        return {
+          isValid: false,
+          reachable: false,
+          error: "Could not reach the network to check this contract.",
+        };
+      }
       return {
         isValid: false,
+        reachable: true,
         error: "Contract does not implement required balance or supply methods",
       };
     }
 
-    return { isValid: true };
+    return { isValid: true, reachable: true };
   } catch (error) {
     return {
       isValid: false,
+      reachable: classifyRpcError(error).kind === "simulation",
       error:
         error instanceof Error ? error.message : "Unknown validation error",
     };
@@ -551,10 +599,17 @@ async function _fetchTokenInfo(
   contractId: string,
   config: NetworkConfig,
 ): Promise<TokenInfo> {
-  // First validate that this is a SEP-41 token contract
+  // First validate that this is a SEP-41 token contract. Distinguish the two
+  // failure modes in the message as well: "invalid token contract" is a claim
+  // about the contract, and it must not be made when the probe never got an
+  // answer out of the network.
   const validation = await validateTokenContract(contractId, config);
   if (!validation.isValid) {
-    throw new Error(`Invalid token contract: ${validation.error}`);
+    throw new Error(
+      validation.reachable
+        ? `Invalid token contract: ${validation.error}`
+        : `Could not reach the network to load this token: ${validation.error}`,
+    );
   }
 
   const [nameVal, symbolVal, decimalsVal, adminVal] = await Promise.all([
