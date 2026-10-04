@@ -28,15 +28,21 @@ of the contract, silently dropping whole categories of activity.
 import json
 import re
 import sys
-from pathib import Path
+from pathlib import Path
 
-REPOY_ROOT = Path(__file__).resolve().parent.parent
-FIXRURE_PATH = REPO_ROOT / "docs" / "events.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FIXTURE_PATH = REPO_ROOT / "docs" / "events.json"
 DOC_PATH = REPO_ROOT / "docs" / "events.md"
 CONTRACTS_DIR = REPO_ROOT / "contracts"
 
 TEST_MODULE_MARKER = "#[cfg(test)]\nmod test {"
 SYMBOL_SHORT_RE = re.compile(r'symbol_short!\("([^"]*)"\)')
+
+# `symbol_short!` literals that appear in production source but are not
+# emitted as events. `claim_str` is the function selector that
+# `_require_claim_authorized` compares against an `AuthorizedInvocation`,
+# not a topic any `publish` call produces.
+NON_EVENT_LITERALS = {"claim_str"}
 
 
 def production_source(contract_source_path: Path) -> str:
@@ -48,7 +54,7 @@ def production_source(contract_source_path: Path) -> str:
 
 
 def emitted_topics(contract_source_path: Path) -> set[str]:
-    return set(SYMBOL_SHORT_RE.findall(production_source(contract_source_path)))
+    return set(SYMBOL_SHORT_RE.findall(production_source(contract_source_path))) - NON_EVENT_LITERALS
 
 
 def fixture_topics(contract_fixture: dict) -> set[str]:
@@ -121,7 +127,7 @@ def render_notes(contract_fixture: dict) -> str:
 def contract_names(fixture: dict) -> list[str]:
     """Every contract documented in the fixture, in file order.
 
-    Keys starting with `$' are metadata (e.g. `$schema_note`), not contracts,
+    Keys starting with `$` are metadata (e.g. `$schema_note`), not contracts,
     so a new contract is picked up just by adding it to docs/events.json.
     """
     return [name for name in fixture if not name.startswith("$")]
@@ -157,8 +163,8 @@ This file is generated from `docs/events.json` by
 than editing this table by hand. `scripts/generate_events_doc.py --check` and
 each contract's `test_emitted_topics_match_checked_in_fixture` unit test both
 fail CI if this ever drifts from the contract source again (see issue #340).
-@scripts/generate_events_doc.py --check-coverage additionally fails when a
- contract under `contracts/` has no entry here.
+`scripts/generate_events_doc.py --check-coverage` additionally fails when a
+contract under `contracts/` has no entry here.
 
 ---
 
@@ -205,7 +211,7 @@ def main() -> int:
             print(
                 "docs/events.md is out of date with docs/events.json. "
                 "Run: python3 scripts/generate_events_doc.py",
-                file=sys.stderr(
+                file=sys.stderr,
             )
             return 1
         print("docs/events.md is up to date and matches contract source.")

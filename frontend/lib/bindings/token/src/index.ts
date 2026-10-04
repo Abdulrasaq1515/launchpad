@@ -33,7 +33,7 @@ if (typeof window !== "undefined") {
 
 
 
-export type DataKey = {tag: "Admin", values: void} | {tag: "PendingAdmin", values: void} | {tag: "PendingAdminExpiry", values: void} | {tag: "ComplianceNode", values: void} | {tag: "Name", values: void} | {tag: "Symbol", values: void} | {tag: "Decimals", values: void} | {tag: "TotalSupply", values: void} | {tag: "TotalBurned", values: void} | {tag: "MaxSupply", values: void} | {tag: "MaxBalancePerAccount", values: void} | {tag: "ContractUri", values: void} | {tag: "Balance", values: readonly [string]} | {tag: "Allowance", values: readonly [string, string]} | {tag: "Frozen", values: readonly [string]} | {tag: "IsPaused", values: void} | {tag: "Locked", values: void} | {tag: "Initialized", values: void} | {tag: "AuthorizationRequired", values: void} | {tag: "AuthorizationRevocable", values: void} | {tag: "AuthorizedHolder", values: readonly [string]};
+export type DataKey = {tag: "Admin", values: void} | {tag: "PendingAdmin", values: void} | {tag: "PendingAdminExpiry", values: void} | {tag: "ComplianceNode", values: void} | {tag: "Name", values: void} | {tag: "Symbol", values: void} | {tag: "Decimals", values: void} | {tag: "TotalSupply", values: void} | {tag: "TotalBurned", values: void} | {tag: "MaxSupply", values: void} | {tag: "MaxBalancePerAccount", values: void} | {tag: "ContractUri", values: void} | {tag: "Balance", values: readonly [string]} | {tag: "Allowance", values: readonly [string, string]} | {tag: "Frozen", values: readonly [string]} | {tag: "IsPaused", values: void} | {tag: "Locked", values: void} | {tag: "Initialized", values: void} | {tag: "AuthorizationRequired", values: void} | {tag: "AuthorizationRevocable", values: void} | {tag: "AuthorizedHolder", values: readonly [string]} | {tag: "FeeBps", values: void} | {tag: "FeeRecipient", values: void};
 
 /**
  * Typed contract errors — surfaced in release WASM as numeric codes.
@@ -135,7 +135,13 @@ export const TokenError = {
   /**
    * A storage getter was called before `initialize`.
    */
-  23: {message:"NotInitialized"}
+  23: {message:"NotInitialized"},
+  24: {message:"ComplianceNodeMustBeCleared"},
+  25: {message:"InvalidContractUri"},
+  26: {message:"InvalidStreamSchedule"},
+  27: {message:"NoStream"},
+  28: {message:"UnauthorizedClaim"},
+  29: {message:"InvalidFeeBps"}
 }
 
 
@@ -319,7 +325,7 @@ export interface Client {
    * `authorization_revocable`: when true, the admin may revoke a holder's
    * authorization, preventing them from receiving further transfers.
    */
-  initialize: ({admin, decimal, name, symbol, initial_supply, max_supply, authorization_required, authorization_revocable, compliance_node, contract_uri}: {admin: string, decimal: u32, name: string, symbol: string, initial_supply: i128, max_supply: Option<i128>, authorization_required: boolean, authorization_revocable: boolean, compliance_node: Option<string>, contract_uri: Option<string>}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
+  initialize: ({admin, decimal, name, symbol, initial_supply, max_supply, authorization_required, authorization_revocable, compliance_node, contract_uri, fee_bps, fee_recipient}: {admin: string, decimal: u32, name: string, symbol: string, initial_supply: i128, max_supply: Option<i128>, authorization_required: boolean, authorization_revocable: boolean, compliance_node: Option<string>, contract_uri: Option<string>, fee_bps: u32, fee_recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<null>>
 
   /**
    * Construct and simulate a max_supply transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.

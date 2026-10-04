@@ -207,11 +207,9 @@ impl MetadataRegistryContract {
         env.storage()
             .persistent()
             .extend_ttl(&at_key, ttl_ledgers, ttl_ledgers);
-        env.storage().persistent().extend_ttl(
-            &DataKey::RecordCount,
-            ttl_ledgers,
-            ttl_ledgers,
-        );
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::RecordCount, ttl_ledgers, ttl_ledgers);
 
         env.events().publish(
             (symbol_short!("register"), token),
@@ -229,9 +227,7 @@ impl MetadataRegistryContract {
     /// Return the indexed record for `token`, or `None` if it was never
     /// registered.
     pub fn get_record(env: Env, token: Address) -> Option<MetadataRecord> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Record(token))
+        env.storage().persistent().get(&DataKey::Record(token))
     }
 
     /// Return the number of tokens registered.
@@ -594,7 +590,16 @@ mod test {
         let creator = Address::generate(&env);
 
         register_as_factory(
-            &env, &contract_id, &factory, &client, &token, "FTK", "A", &creator, 1, None,
+            &env,
+            &contract_id,
+            &factory,
+            &client,
+            &token,
+            "FTK",
+            "A",
+            &creator,
+            1,
+            None,
         );
         env.mock_all_auths();
         assert_eq!(
