@@ -24,11 +24,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("navigation");
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [routesSeen, setRoutesSeen] = useState(pathname);
 
   // A navigation should not leave the drawer covering the page it opened.
-  useEffect(() => {
+  // Adjust the state during render (React's "reset state when a prop changes"
+  // pattern) instead of in an effect, so the drawer is never visible for a
+  // frame on the new route and the `set-state-in-effect` rule stays satisfied.
+  if (routesSeen !== pathname) {
+    setRoutesSeen(pathname);
     setDrawerOpen(false);
-  }, [pathname]);
+  }
 
   // While the drawer is over the content, the content behind it should not
   // scroll — otherwise closing it returns you somewhere you never went.

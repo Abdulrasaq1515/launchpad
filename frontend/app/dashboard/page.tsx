@@ -31,14 +31,16 @@ export default function DashboardIndex() {
   const [tracked, setTracked] = useState<TrackedDeployment[]>([]);
 
   useEffect(() => {
-    if (!connected || !publicKey) {
-      setTracked([]);
-      return;
-    }
+    // Seed the browser's tracked deployments after hydration. This reads
+    // localStorage, so it cannot happen during render; the effect is the
+    // correct place for this external-store read.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store seed (localStorage), must run post-hydration
     setTracked(
-      getTrackedDeployments(publicKey).filter(
-        (d) => d.network === networkConfig.network,
-      ),
+      !connected || !publicKey
+        ? []
+        : getTrackedDeployments(publicKey).filter(
+            (d) => d.network === networkConfig.network,
+          ),
     );
   }, [connected, publicKey, networkConfig.network]);
 
