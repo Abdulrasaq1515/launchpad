@@ -73,6 +73,8 @@ fn setup_env() -> (Env, TokenContractClient<'static>, Address, Address, Address)
         &false,
         &None,
         &None,
+        &0u32,
+        &admin,
     );
 
     (env, client, admin, user1, user2)
@@ -103,6 +105,8 @@ fn setup_capped_env(
         &false,
         &None,
         &None,
+        &0u32,
+        &admin,
     );
 
     (env, client, admin, user)
@@ -422,6 +426,8 @@ fn test_mint_i128_overflow() {
         &false,
         &None,
         &None,
+        &0u32,
+        &admin,
     );
 
     // total_supply is (i128::MAX − 1); minting 2 overflows.
@@ -486,6 +492,8 @@ fn test_initialize_rejects_decimals_above_18() {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         ),
         Err(Ok(TokenError::InvalidDecimals.into()))
     );
@@ -511,6 +519,8 @@ fn test_initialize_accepts_decimals_at_boundary() {
         &false,
         &None,
         &None,
+        &0u32,
+        &admin,
     );
 
     assert_eq!(client.decimals(), 18u32);
@@ -567,6 +577,8 @@ fn test_partial_transfer_from_succeeds_with_above_max_ttl_allowance() {
         &false,
         &None,
         &None,
+        &0u32,
+        &admin,
     );
 
     // Fund the owner account.
@@ -615,6 +627,8 @@ fn test_partial_burn_from_succeeds_with_above_max_ttl_allowance() {
         &false,
         &None,
         &None,
+        &0u32,
+        &admin,
     );
 
     client.transfer(&admin, &owner, &1_000i128);

@@ -3,11 +3,11 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "34257ec9ed4ee7b8d853870482e3983c79297d710fc16ade90f8c12f9381d79b",
+        "wasm_hash": "ac3360a0b4be58a0729f6aecdf9c413c625ffb89f39df4aa185e0b9f8d2c4ac7",
         "source_tag": "v1.0.0",
-        "wasm_bytes": 27736,
+        "wasm_bytes": 39884,
         "networks": {
-          "testnet": "34257ec9ed4ee7b8d853870482e3983c79297d710fc16ade90f8c12f9381d79b"
+          "testnet": "ac3360a0b4be58a0729f6aecdf9c413c625ffb89f39df4aa185e0b9f8d2c4ac7"
         }
       }
     },
@@ -22,11 +22,11 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "cbaa3e10b8b0ad090c2279734e26df352f10e66da676c985f024fdbaf7d50bb7",
+        "wasm_hash": "307ef4000b6309a9acf87fa376ea9005fd063ae4c656351bf283d936b421a767",
         "source_tag": "v1.0.0",
-        "wasm_bytes": 23155,
+        "wasm_bytes": 26193,
         "networks": {
-          "testnet": "cbaa3e10b8b0ad090c2279734e26df352f10e66da676c985f024fdbaf7d50bb7"
+          "testnet": "307ef4000b6309a9acf87fa376ea9005fd063ae4c656351bf283d936b421a767"
         }
       }
     },
@@ -41,11 +41,11 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "6a844bebd74531d94d270bd834b755feb53916ca0a593f47be5fa2b576ad9c4b",
+        "wasm_hash": "1aad60736057c5a907598c029ee34868e75a559069aa6585afd6e03d1615af32",
         "source_tag": "v1.0.0",
-        "wasm_bytes": 7169,
+        "wasm_bytes": 18129,
         "networks": {
-          "testnet": "6a844bebd74531d94d270bd834b755feb53916ca0a593f47be5fa2b576ad9c4b"
+          "testnet": "1aad60736057c5a907598c029ee34868e75a559069aa6585afd6e03d1615af32"
         }
       }
     },
@@ -60,11 +60,30 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "126cf8e1a2ffe99c4a1cd996fd02b823f5c833d58705bd573e508ac5ce79ef07",
+        "wasm_hash": "443942d5c3382e7db2b9982730eba35c68fa761ed175202815f7ef55589ba230",
         "source_tag": "v1.0.0",
-        "wasm_bytes": 9773,
+        "wasm_bytes": 17357,
         "networks": {
-          "testnet": "126cf8e1a2ffe99c4a1cd996fd02b823f5c833d58705bd573e508ac5ce79ef07"
+          "testnet": "443942d5c3382e7db2b9982730eba35c68fa761ed175202815f7ef55589ba230"
+        }
+      }
+    },
+    "build_info": {
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
+      "profile": "release"
+    }
+  },
+  "metadata_registry": {
+    "latest": "v1.0.0",
+    "versions": {
+      "v1.0.0": {
+        "wasm_hash": "83cec4e0d078bfdfd339c8bedd7067c27e5830bd6a664c5dacaa737dd18bc979",
+        "source_tag": "v1.0.0",
+        "wasm_bytes": 8870,
+        "networks": {
+          "testnet": "83cec4e0d078bfdfd339c8bedd7067c27e5830bd6a664c5dacaa737dd18bc979"
         }
       }
     },

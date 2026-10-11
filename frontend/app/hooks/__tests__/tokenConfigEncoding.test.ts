@@ -25,9 +25,13 @@ const FIELDS = [
   "authorization_required",
   "authorization_revocable",
   "compliance_node",
+  "contract_uri",
   "decimal",
+  "fee_bps",
+  "fee_recipient",
   "initial_supply",
   "max_supply",
+  "metadata",
   "name",
   "symbol",
 ];

@@ -38,7 +38,13 @@
                   "bool": false
                 },
                 "void",
-                "void"
+                "void",
+                {
+                  "u32": 0
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                }
               ]
             }
           },
@@ -59,7 +65,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "2536660046179"
+                  "i128": "4711245314832"
                 }
               ]
             }
@@ -89,7 +95,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "i128": "1902495034634"
+                  "i128": "235562265741"
                 }
               ]
             }
@@ -116,7 +122,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "i128": "5900000000000"
+                  "i128": "1800000000000"
                 }
               ]
             }
@@ -162,7 +168,7 @@
               },
               "durability": "persistent",
               "val": {
-                "i128": "4100000000000"
+                "i128": "8200000000000"
               }
             }
           },
@@ -189,7 +195,7 @@
               },
               "durability": "persistent",
               "val": {
-                "i128": "634165011545"
+                "i128": "4475683049091"
               }
             }
           },
@@ -216,7 +222,7 @@
               },
               "durability": "persistent",
               "val": {
-                "i128": "1902495034634"
+                "i128": "235562265741"
               }
             }
           },
@@ -291,6 +297,30 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "FeeBps"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeeRecipient"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Initialized"
                           }
                         ]
@@ -332,7 +362,7 @@
                         ]
                       },
                       "val": {
-                        "i128": "5900000000000"
+                        "i128": "1800000000000"
                       }
                     },
                     {
@@ -344,7 +374,7 @@
                         ]
                       },
                       "val": {
-                        "i128": "6636660046179"
+                        "i128": "12911245314832"
                       }
                     }
                   ]

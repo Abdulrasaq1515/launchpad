@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { MAX_CONTRACT_URI_LENGTH, safeExternalUrl } from "@/lib/safeUrl";
 
 /**
  * Validation schemas for every admin form.
@@ -76,8 +77,21 @@ export const manageVestingSchema = z.object({
     ),
 });
 
+// Mirrors the token contract's `update_contract_uri` check so an unsafe URI
+// (e.g. `javascript:`) is refused here rather than by a failed transaction.
 export const metadataUriSchema = z.object({
-  uri: z.string().url("Must be a valid URL").min(1, "URI is required"),
+  uri: z
+    .string()
+    .trim()
+    .min(1, "URI is required")
+    .refine(
+      (val) => new TextEncoder().encode(val).length <= MAX_CONTRACT_URI_LENGTH,
+      `URI must be at most ${MAX_CONTRACT_URI_LENGTH} bytes`,
+    )
+    .refine(
+      (val) => safeExternalUrl(val) !== null,
+      "Must be an https:// or ipfs:// URL",
+    ),
 });
 
 export const upgradeSchema = z.object({

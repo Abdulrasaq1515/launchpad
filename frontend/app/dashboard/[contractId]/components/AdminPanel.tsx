@@ -35,7 +35,7 @@ import { DangerCard } from "./admin/DangerCard";
  *
  * This file used to be a 2,351-line monolith holding every admin capability,
  * a 14-branch dispatcher, a second parallel branch chain for success handling,
- * and eleven separately constructed RPC clients. It is now an orchestrator: it
+ * and \u00211even separately constructed RPC clients. It is now an orchestrator: it
  * owns the shared transaction pipeline (`useAdminAction`) and the on-chain
  * state reads (`useTokenAdminState`), renders the banners, and lays out the
  * cards. Each capability lives in its own file under `components/admin/`.
@@ -158,7 +158,7 @@ export function AdminPanel({
         />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
         {canStillMint(maxSupply, totalSupply) && (
           <MintCard admin={admin} disabled={disabled} />
         )}
@@ -169,14 +169,7 @@ export function AdminPanel({
         <ManageVestingCard admin={admin} disabled={disabled} />
         <VestingUpgradeCard admin={admin} disabled={disabled} locked={state.locked} />
 
-        {/* ── Vesting Dashboard ── */}
-        <VestingDashboard
-          tokenContractId={contractId}
-          decimals={decimals}
-          read={admin.read}
-        />
-
-        {/* ── Vesting Dashboard ── */}
+        {/* \u2500\u2500 Vesting Dashboard \u2500\u2500 */}
         <VestingDashboard
           tokenContractId={contractId}
           decimals={decimals}

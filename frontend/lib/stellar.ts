@@ -45,6 +45,14 @@ export interface WasmManifest {
     versions: Record<string, WasmManifestEntry>;
     build_info: { sdk_version: string; rust_version: string; profile: string };
   };
+  factory?: {
+    deployments: Record<string, FactoryManifestEntry | undefined>;
+  };
+}
+
+export interface FactoryManifestEntry {
+  address: string;
+  wasm_hash: string;
 }
 
 export async function fetchWasmManifest(): Promise<WasmManifest | null> {
@@ -105,6 +113,21 @@ export interface TransactionItem {
   timestamp: number;
   ledger: number;
   id: string;
+}
+
+/**
+ * Metadata describing how much of a contract's history a page actually covers.
+ *
+ * When Mercury is unavailable the RPC fallback can only read back to the
+ * oldest ledger still retained by the node (roughly 1000 ledgers, ~83
+ * minutes). Callers must surface this so the UI does not present a truncated
+ * window as the token's complete history.
+ */
+export interface HistoryWindow {
+  /** Oldest ledger included in this page, or null when unknown. */
+  startLedger: number | null;
+  /** True when the page does not reach back to the contract's first ledger. */
+  truncated: boolean;
 }
 
 export interface TokenAllowanceInfo {
@@ -208,6 +231,57 @@ export async function getContractWasmHash(
   } catch {
     return null;
   }
+}
+
+export type FactoryVerification =
+  | { ok: true; verified: boolean }
+  | { ok: false; reason: string; expected?: string; actual?: string };
+
+/**
+ * Check the configured factory against the audited manifest for the active
+ * network: the address must be the one the manifest names and the on-chain
+ * WASM hash must equal the manifest hash. Fields the manifest leaves blank
+ * are not checked (`verified: false` when nothing could be compared).
+ */
+export async function verifyFactory(
+  factoryAddress: string,
+  config: NetworkConfig,
+): Promise<FactoryVerification> {
+  const manifest = await fetchWasmManifest();
+  const entry = manifest?.factory?.deployments?.[config.network];
+  if (!entry || (!entry.address && !entry.wasm_hash)) {
+    return { ok: true, verified: false };
+  }
+
+  if (entry.address && entry.address !== factoryAddress) {
+    return {
+      ok: false,
+      reason: "The configured factory address is not the audited factory for this network.",
+      expected: entry.address,
+      actual: factoryAddress,
+    };
+  }
+
+  if (entry.wasm_hash) {
+    const onChain = await getContractWasmHash(factoryAddress, config);
+    if (!onChain) {
+      return {
+        ok: false,
+        reason: "Could not read the factory's on-chain WASM hash.",
+        expected: entry.wasm_hash,
+      };
+    }
+    if (onChain.toLowerCase() !== entry.wasm_hash.toLowerCase()) {
+      return {
+        ok: false,
+        reason: "The factory's on-chain WASM hash does not match the audited build.",
+        expected: entry.wasm_hash,
+        actual: onChain,
+      };
+    }
+  }
+
+  return { ok: true, verified: true };
 }
 
 function encodeTopicSymbol(symbol: string): string {
@@ -472,6 +546,84 @@ export interface TokenValidation {
   error?: string;
 }
 
+/**
+ * Result of probing a contract for a SEP-41 token interface.
+ *
+ * Three states, not two: a well-formed contract ID can point at an account
+ * (not a contract at all), at a contract that simply does not export the
+ * token interface, or at a real token. Collapsing the middle state into
+ * either of the others is what made every well-formed `C...` address render
+ * as an empty token dashboard.
+ */
+export type TokenContractProbe =
+  | { status: "token" }
+  | { status: "not-a-contract"; error: string }
+  | { status: "no-token-interface"; error: string }
+  | { status: "unreachable"; error: string };
+
+/**
+ * Distinguish "this contract has no `name()` export" from "the RPC call
+ * itself failed".
+ *
+ * `simulateTransaction` reports a missing export as a simulation error whose
+ * text names the missing function, while a transport failure rejects the
+ * promise outright. That difference is the whole probe: it is the same
+ * pattern `set_compliance_node` uses on the contract side to decide whether
+ * an optional getter exists.
+ */
+function isMissingExportError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    /missing\s+(value|function|method|export)/i.test(message) ||
+    /function\s+['"`]?[a-z_][a-z0-9_]*['"`]?\s+(not\s+found|does\s+not\s+exist)/i.test(
+      message,
+    ) ||
+    /has\s+no\s+member/i.test(message) ||
+    /not\s+found\s+in\s+contract/i.test(message)
+  );
+}
+
+/**
+ * Probe a contract once and report which of the three states it is in.
+ *
+ * Runs a single `name()` simulation: a success means the contract exports the
+ * token interface, a missing-export simulation error means it is a contract
+ * without one, and anything else (transport, bad ID) is reported as
+ * unreachable so the caller can keep showing the transport-failure copy.
+ */
+export async function probeTokenContract(
+  contractId: string,
+  config: NetworkConfig,
+): Promise<TokenContractProbe> {
+  try {
+    const nameVal = await simulateCall(contractId, "name", config);
+    try {
+      decodeString(nameVal);
+    } catch {
+      return {
+        status: "no-token-interface",
+        error: "Contract does not implement a decodable 'name()' method",
+      };
+    }
+    return { status: "token" };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown validation error";
+
+    if (isMissingExportError(error)) {
+      return { status: "no-token-interface", error: message };
+    }
+
+    // A contract ID that does not resolve to a deployed contract surfaces as
+    // a ledger-entry lookup failure rather than a missing export.
+    if (/contract\s+(not\s+found|does\s+not\s+exist)/i.test(message)) {
+      return { status: "not-a-contract", error: message };
+    }
+
+    return { status: "unreachable", error: message };
+  }
+}
+
 export async function validateTokenContract(
   contractId: string,
   config: NetworkConfig,
@@ -616,7 +768,7 @@ async function _fetchTokenInfo(
     simulateCall(contractId, "name", config),
     simulateCall(contractId, "symbol", config),
     simulateCall(contractId, "decimals", config),
-    simulateCall(contractId, "admin", config).catch(() => null),
+    simulateCall(contractId, "admin_if_any", config),
   ]);
 
   const decimals = decodeU32(decimalsVal);
@@ -957,9 +1109,24 @@ async function resolveVestingScheduleIndex(params: {
   return { scheduleIndex: scheduleCount - 1, scheduleCount };
 }
 
+/** Entries per `get_schedules_paginated` call. Matches the dashboard page size. */
+const SCHEDULE_PAGE_SIZE = 20;
+
 /**
- * Fetch all vesting schedules for a recipient using the aggregate getter.
+ * Fetch all vesting schedules for a recipient.
  * Replaces the N+1 pattern (get_schedule_count + N × get_schedule).
+ *
+ * Pages through `get_schedules_paginated` rather than calling
+ * `get_all_schedules` (#466). The contract caps a recipient at
+ * `MAX_SCHEDULES_PER_RECIPIENT` schedules, so the aggregate getter is now
+ * bounded — but one response carrying the whole set still costs a simulation
+ * proportional to their total grants, and the dashboard renders a screenful at
+ * a time. Paging keeps each response small and per-call work constant as
+ * grants accumulate.
+ *
+ * Pages are followed until one comes back shorter than the page size, which is
+ * the only reliable "no more" signal: a short page can still be followed by
+ * more entries.
  */
 export async function fetchAllVestingSchedules(
   vestingContractId: string,
@@ -967,16 +1134,38 @@ export async function fetchAllVestingSchedules(
   config: NetworkConfig,
 ): Promise<VestingScheduleInfo[]> {
   const recipientScVal = new StellarSdk.Address(recipient).toScVal();
-  const result = await simulateCall(
+
+  // Callers use `scheduleCount` for "x of y", so it has to be the recipient's
+  // real total rather than the size of whichever page happened to land last.
+  const scheduleCount = await fetchVestingScheduleCount(
     vestingContractId,
-    "get_all_schedules",
+    recipient,
     config,
-    [recipientScVal],
   );
+  if (scheduleCount <= 0) {
+    return [];
+  }
 
   const schedules: VestingScheduleInfo[] = [];
-  const vec = result.vec();
-  if (vec) {
+  for (let start = 0; start < scheduleCount; start += SCHEDULE_PAGE_SIZE) {
+    const result = await simulateCall(
+      vestingContractId,
+      "get_schedules_paginated",
+      config,
+      [
+        recipientScVal,
+        StellarSdk.nativeToScVal(BigInt(start), { type: "u32" }),
+        StellarSdk.nativeToScVal(BigInt(SCHEDULE_PAGE_SIZE), { type: "u32" }),
+      ],
+    );
+
+    const vec = result.vec();
+    if (!vec || vec.length === 0) {
+      // The count said there was more; a short read here means the index moved
+      // under us. Stop rather than spin.
+      break;
+    }
+
     for (let i = 0; i < vec.length; i++) {
       const fields = vec[i].map()!;
       schedules.push({
@@ -986,8 +1175,10 @@ export async function fetchAllVestingSchedules(
         endLedger: decodeU32(getStructField(fields, "end_ledger")),
         released: decodeI128(getStructField(fields, "released")),
         revoked: getStructField(fields, "revoked").b(),
-        scheduleIndex: i,
-        scheduleCount: vec.length,
+        // Global index, not page-relative: this value is passed back to
+        // `release`, which addresses schedules absolutely.
+        scheduleIndex: start + i,
+        scheduleCount,
       });
     }
   }
@@ -1095,6 +1286,10 @@ export const TRACKED_EVENT_TOPICS = [
   "upd_uri",
   "set_areq",
   "rvk_rvc",
+  "claim",
+  "stream",
+  "seal",
+  "fee_coll",
 ] as const;
 
 /**
@@ -1171,6 +1366,7 @@ export function decodeActivityEvent(
   const base: TokenActivityInfo = {
     id: meta.id,
     pagingToken: meta.id,
+    ledger: meta.ledger,
     type: "other",
     amount: "-",
     from: "-",
@@ -1366,13 +1562,19 @@ export async function fetchTransactionHistory(
   contractId: string,
   config: NetworkConfig,
   options: { cursor?: string; limit?: number } = {},
-): Promise<{ items: TransactionItem[]; nextCursor: string | null }> {
+): Promise<{
+  items: TransactionItem[];
+  nextCursor: string | null;
+  window: HistoryWindow;
+}> {
   const { cursor, limit = 200 } = options;
 
-  const topicFilters = TRACKED_EVENT_TOPICS.map(encodeTopicSymbol);
-
+  // Do NOT pass TRACKED_EVENT_TOPICS as RPC topic filters.
+  // Each topic would become a separate EventFilter, which breaks global ledger
+  // ordering, splits the page budget, and can exceed the RPC filter cap.
+  // Client-side filtering by typePath (below) already discards non-transfer
+  // events from the result set. See: github.com/soropad/launchpad/issues/472
   const { events, nextCursor } = await fetchIndexedEvents(contractId, config, {
-    topics: topicFilters,
     cursor,
     limit,
   });
@@ -1380,6 +1582,9 @@ export async function fetchTransactionHistory(
   const items: TransactionItem[] = [];
 
   for (const event of events) {
+    // Skip events that cannot be placed in chain order or lack a timestamp.
+    if (event.ledger === null || event.timestamp === null) continue;
+
     const topic0 = toScVal(event.topic[0]);
     if (!topic0) continue;
 
@@ -1431,7 +1636,38 @@ export async function fetchTransactionHistory(
     items.push(item as TransactionItem);
   }
 
-  return { items: items.reverse(), nextCursor };
+  // The RPC fallback anchors its no-cursor scan ~1000 ledgers behind the head
+  // (see indexer.ts). Surface the oldest ledger we actually saw so callers can
+  // tell the user the window is truncated rather than presenting it as the
+  // token's full history. A cursor means the caller is paging through an
+  // already-established window, so we only compute this on the first page.
+  const window = computeHistoryWindow(events, cursor);
+
+  return { items: items.reverse(), nextCursor, window };
+}
+
+function computeHistoryWindow(
+  events: { ledger: number | null }[],
+  cursor: string | undefined,
+): HistoryWindow {
+  if (cursor) {
+    return { startLedger: null, truncated: false };
+  }
+  if (events.length === 0) {
+    return { startLedger: null, truncated: false };
+  }
+  // Exclude events with no known ledger from the window calculation.
+  const knownLedgers = events
+    .map((e) => e.ledger)
+    .filter((l): l is number => l !== null);
+  if (knownLedgers.length === 0) {
+    return { startLedger: null, truncated: false };
+  }
+  const startLedger = knownLedgers.reduce(
+    (min, l) => (l < min ? l : min),
+    knownLedgers[0],
+  );
+  return { startLedger, truncated: true };
 }
 
 export type TokenActivityType =
@@ -1442,6 +1678,7 @@ export type TokenActivityType =
 export interface TokenActivityInfo {
   id: string;
   pagingToken: string;
+  ledger?: number;
   type: TokenActivityType;
   amount: string;
   from: string;
@@ -1461,16 +1698,23 @@ export async function fetchAccountOperations(
   config: NetworkConfig,
   cursor?: string,
   limit = 10,
-): Promise<{ records: TokenActivityInfo[]; nextCursor: string | null }> {
+): Promise<{
+  records: TokenActivityInfo[];
+  nextCursor: string | null;
+  window: HistoryWindow;
+}> {
   try {
     // For contract IDs, use indexer events instead of Horizon.
     if (accountId.startsWith("C")) {
-      const topicFilters = TRACKED_EVENT_TOPICS.map(encodeTopicSymbol);
+      // Do NOT pass TRACKED_EVENT_TOPICS as RPC topic filters.
+      // Each topic would become a separate EventFilter, which breaks global
+      // ledger ordering, splits the page budget, and can exceed the RPC
+      // filter cap. decodeActivityEvent already filters by topic client-side.
+      // See: github.com/soropad/launchpad/issues/472
       const pageSize = Math.min(limit, 200);
 
       const { events, nextCursor: nextIndexerCursor } =
         await fetchIndexedEvents(accountId, config, {
-          topics: topicFilters,
           limit: pageSize,
           cursor: cursor ?? undefined,
         });
@@ -1478,6 +1722,9 @@ export async function fetchAccountOperations(
       const records: TokenActivityInfo[] = [];
 
       for (const event of events) {
+        // Skip events that cannot be placed in chain order or lack a timestamp.
+        if (event.ledger === null || event.timestamp === null) continue;
+
         const decoded = decodeActivityEvent(
           // IndexedEvent.topic is unknown[]; the decoder re-parses each entry
           // as an XDR-encoded string, so normalize before handing it over.
@@ -1493,14 +1740,18 @@ export async function fetchAccountOperations(
         if (decoded) records.push(decoded);
       }
 
-      return { records, nextCursor: nextIndexerCursor };
+      return {
+        records,
+        nextCursor: nextIndexerCursor,
+        window: computeHistoryWindow(events, cursor),
+      };
     }
 
     const horizon = new StellarSdk.Horizon.Server(getHorizonUrl());
 
     // Horizon's .forAccount() only accepts Ed25519 public keys (starting with G).
     if (!accountId.startsWith("G") && !accountId.startsWith("M")) {
-      return { records: [], nextCursor: null };
+      return { records: [], nextCursor: null, window: { startLedger: null, truncated: false } };
     }
 
     let callBuilder = horizon
@@ -1609,10 +1860,14 @@ export async function fetchAccountOperations(
     // Filter out "other" if we only want token activity, but keeping it helps visibility
     const filtered = parsed.filter((p) => p.type !== "other");
 
-    return { records: filtered.length > 0 ? filtered : parsed, nextCursor };
+    return {
+      records: filtered.length > 0 ? filtered : parsed,
+      nextCursor,
+      window: { startLedger: null, truncated: false },
+    };
   } catch (error) {
     console.error("Error fetching account operations from Horizon:", error);
-    return { records: [], nextCursor: null };
+    return { records: [], nextCursor: null, window: { startLedger: null, truncated: false } };
   }
 }
 
@@ -2102,4 +2357,165 @@ export async function submitTransaction(
     },
     { operation: "Submit transaction" },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Launch attestation
+// ---------------------------------------------------------------------------
+
+/**
+ * The four on-chain facts a deployer needs before signing.
+ *
+ * Everything here is read directly from the chain and compared against the
+ * audited manifest — no SoroPad API involved. A user can reproduce this
+ * independently given only the factory address and their salt.
+ */
+export interface LaunchAttestation {
+  /** Current WASM hash of the factory contract itself (hex). */
+  factoryHash: string | null;
+  /** WASM hash the factory will use for the token it is about to deploy (hex). */
+  tokenWasmHash: string | null;
+  /**
+   * Whether both hashes match the audited manifest.
+   *
+   * - `"match"` — both hashes present in manifest and equal to on-chain values.
+   * - `"mismatch"` — at least one hash differs from the manifest (fail-closed).
+   * - `"unknown"` — manifest could not be fetched or has no entry for this
+   *   network; the check is inconclusive, not a hard failure.
+   */
+  manifestMatch: "match" | "mismatch" | "unknown";
+  /** Deterministic token address that `deploy_token(deployer, salt)` will produce. */
+  address: string | null;
+  /** Non-fatal notices the user should see (e.g. manifest entries are empty). */
+  warnings: string[];
+}
+
+/**
+ * Resolve all four attestation facts for an imminent `deploy_token` call.
+ *
+ * Fetches the factory's own WASM hash, reads the token WASM hash the factory
+ * currently points at (via `get_token_wasm_hash`), computes the deterministic
+ * token address from `deployer` + `salt`, and cross-checks both hashes against
+ * the audited manifest.
+ *
+ * Designed to run during Step 4 (Review) before the user signs — all reads
+ * are view-only simulations, nothing is submitted.
+ */
+export async function resolveLaunchAttestation(
+  factoryAddress: string,
+  deployer: string,
+  salt: Uint8Array,
+  config: NetworkConfig,
+): Promise<LaunchAttestation> {
+  const warnings: string[] = [];
+
+  // ── 1. Read factory WASM hash and token WASM hash in parallel ────────
+  const [factoryHash, tokenWasmHashResult, manifest] = await Promise.allSettled([
+    getContractWasmHash(factoryAddress, config),
+    simulateCall(factoryAddress, "get_token_wasm_hash", config),
+    fetchWasmManifest(),
+  ]);
+
+  const resolvedFactoryHash =
+    factoryHash.status === "fulfilled" ? factoryHash.value : null;
+
+  let resolvedTokenWasmHash: string | null = null;
+  if (tokenWasmHashResult.status === "fulfilled") {
+    try {
+      // get_token_wasm_hash returns BytesN<32>
+      const rawBytes = tokenWasmHashResult.value.bytes() as Buffer;
+      resolvedTokenWasmHash = Buffer.from(rawBytes).toString("hex");
+    } catch {
+      // Could not decode the return value
+    }
+  }
+
+  // ── 2. Compute deterministic token address via factory view call ─────
+  // The factory exposes `get_deployment_address(deployer, salt) -> Address`,
+  // which mirrors the host's deterministic derivation without submitting
+  // anything. This is the canonical way to get the address client-side.
+  let address: string | null = null;
+  try {
+    const saltScVal = StellarSdk.nativeToScVal(Buffer.from(salt));
+    const deployerScVal = new StellarSdk.Address(deployer).toScVal();
+    const retval = await simulateCall(
+      factoryAddress,
+      "get_deployment_address",
+      config,
+      [deployerScVal, saltScVal],
+    );
+    address = StellarSdk.Address.fromScVal(retval).toString();
+  } catch {
+    // View call failed — factory might not be deployed yet or RPC unreachable
+    address = null;
+  }
+
+  // ── 3. Compare against manifest ──────────────────────────────────────
+  const mfst = manifest.status === "fulfilled" ? manifest.value : null;
+
+  let manifestMatch: LaunchAttestation["manifestMatch"] = "unknown";
+
+  if (!mfst) {
+    warnings.push(
+      "The WASM manifest could not be fetched. Hash verification is unavailable.",
+    );
+  } else {
+    const networkEntry = mfst.factory?.deployments?.[config.network];
+    const manifestFactoryHash = networkEntry?.wasm_hash ?? null;
+    const manifestTokenHash =
+      mfst.token?.versions?.[mfst.token?.latest ?? ""]?.wasm_hash ?? null;
+
+    const factoryHashKnown = !!manifestFactoryHash;
+    const tokenHashKnown = !!manifestTokenHash;
+
+    if (!factoryHashKnown && !tokenHashKnown) {
+      warnings.push(
+        "The manifest has no reference hashes for this network. Verification is inconclusive.",
+      );
+      manifestMatch = "unknown";
+    } else {
+      const factoryOk =
+        !factoryHashKnown ||
+        !resolvedFactoryHash ||
+        resolvedFactoryHash.toLowerCase() === manifestFactoryHash!.toLowerCase();
+
+      const tokenOk =
+        !tokenHashKnown ||
+        !resolvedTokenWasmHash ||
+        resolvedTokenWasmHash.toLowerCase() === manifestTokenHash!.toLowerCase();
+
+      if (factoryOk && tokenOk) {
+        manifestMatch = "match";
+      } else {
+        manifestMatch = "mismatch";
+        if (!factoryOk) {
+          warnings.push(
+            `Factory WASM mismatch — on-chain: ${resolvedFactoryHash?.slice(0, 12)}…, manifest: ${manifestFactoryHash?.slice(0, 12)}…`,
+          );
+        }
+        if (!tokenOk) {
+          warnings.push(
+            `Token WASM mismatch — on-chain: ${resolvedTokenWasmHash?.slice(0, 12)}…, manifest: ${manifestTokenHash?.slice(0, 12)}…`,
+          );
+        }
+      }
+
+      if (factoryHashKnown && !resolvedFactoryHash) {
+        warnings.push("Could not read the factory's on-chain WASM hash.");
+      }
+      if (tokenHashKnown && !resolvedTokenWasmHash) {
+        warnings.push(
+          "Could not read the token WASM hash from the factory.",
+        );
+      }
+    }
+  }
+
+  return {
+    factoryHash: resolvedFactoryHash,
+    tokenWasmHash: resolvedTokenWasmHash,
+    manifestMatch,
+    address,
+    warnings,
+  };
 }

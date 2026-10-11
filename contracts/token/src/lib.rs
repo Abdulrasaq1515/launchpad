@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error,
-    symbol_short, Address, BytesN, Env, String,
+    symbol_short, Address, BytesN, Env, IntoVal, String,
 };
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,15 @@ const TTL_LEDGERS: u32 = 365 * 24 * 60 * 60 / 5;
 /// this ~365-day deadline does; a proposal left untouched that long needs the
 /// instance kept alive by any other call.
 const ADMIN_PROPOSAL_EXPIRY_LEDGERS: u32 = TTL_LEDGERS;
+
+/// Longest contract URI, in bytes, that `initialize` / `update_contract_uri`
+/// will store. Comfortably fits an `ipfs://<CIDv1>/metadata.json` or a normal
+/// `https://` URL while keeping the instance entry small.
+const MAX_CONTRACT_URI_LEN: u32 = 256;
+
+/// Hard ceiling on the immutable transfer fee, in basis points
+/// (1 bps = 0.01%). Chosen at deploy, never changed afterward — issue #497.
+const MAX_FEE_BPS: u32 = 1_000; // 10%
 
 // ---------------------------------------------------------------------------
 // Storage keys
@@ -71,6 +80,29 @@ pub enum DataKey {
     AuthorizationRequired,
     AuthorizationRevocable,
     AuthorizedHolder(Address),
+    /// Set once by `launch_seal`. Holds the issuer's commitment together with
+    /// the ledger and total supply at the moment of sealing (#493).
+    LaunchSeal,
+    /// Continuous-vesting schedule for a recipient, written by `stream_grant`.
+    Stream(Address),
+    /// Total amount already released to a recipient by `claim_stream`.
+    StreamReleased(Address),
+    /// Immutable transfer fee, in basis points. Written exactly once by
+    /// `initialize` and never written again — issue #497.
+    FeeBps,
+    /// Address that receives the immutable transfer fee. Written exactly
+    /// once alongside `FeeBps` — issue #497.
+    FeeRecipient,
+}
+
+/// Creator-attested record that a launch reached the issuer's success
+/// threshold. Written once by `launch_seal` and never modified.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct LaunchSeal {
+    pub commitment: BytesN<32>,
+    pub ledger: u32,
+    pub supply: i128,
 }
 
 #[derive(Clone, Debug)]
@@ -78,6 +110,21 @@ pub enum DataKey {
 pub struct AllowanceValue {
     pub amount: i128,
     pub expiration_ledger: u32,
+}
+
+/// Continuous-vesting schedule for a single recipient.
+///
+/// Accrual is pure arithmetic over the ledger sequence: nothing here is
+/// touched by the token, so `stream_accrued` reads without a transaction and
+/// a paused or frozen token only stops the withdrawal, never the accounting.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct Stream {
+    pub total: i128,
+    pub start_ledger: u32,
+    pub end_ledger: u32,
+    pub max_per_claim: i128,
+    pub released: i128,
 }
 
 // ---------------------------------------------------------------------------
@@ -143,10 +190,24 @@ pub enum TokenError {
     ContractUriNotSet = 22,
     /// A storage getter was called before `initialize`.
     NotInitialized = 23,
+    /// `revoke_admin` requires the compliance node to be cleared first.
+    ComplianceNodeMustBeCleared = 24,
+    /// Contract URI is empty, too long, contains whitespace or control
+    /// characters, or uses a scheme other than `https://` or `ipfs://`.
+    InvalidContractUri = 25,
+    /// `stream_grant` was called with a non-positive total, an end ledger not
+    /// strictly after the start ledger, or a non-positive `max_per_claim`.
+    InvalidStreamSchedule = 26,
+    /// `claim_stream` was called with no schedule for the recipient.
+    NoStream = 27,
+    /// The authorised invocation does not cover the requested claim range.
+    UnauthorizedClaim = 28,
+    /// `fee_bps` exceeds `MAX_FEE_BPS` in `initialize` (issue #497).
+    InvalidFeeBps = 29,
     /// `propose_admin` was called with the address that is already admin.
-    AlreadyAdmin = 24,
+    AlreadyAdmin = 30,
     /// `accept_admin` was called after the proposal's expiry ledger.
-    ProposalExpired = 25,
+    ProposalExpired = 31,
 }
 
 #[contractclient(name = "ComplianceNodeClient")]
@@ -175,6 +236,7 @@ pub trait ComplianceNodeInterface {
 /// - #2  two-step admin transfer (propose_admin / accept_admin)
 /// - #4  max_supply cap enforcement in mint
 /// - #138 clawback() and #163 compliance-node transfer checks
+/// - #493 launch_seal() graduation signal
 #[contract]
 pub struct TokenContract;
 
@@ -216,6 +278,8 @@ impl TokenContract {
         authorization_revocable: bool,
         compliance_node: Option<Address>,
         contract_uri: Option<String>,
+        fee_bps: u32,
+        fee_recipient: Address,
     ) {
         if env.storage().instance().has(&DataKey::Initialized) {
             panic_with_error!(&env, TokenError::AlreadyInitialized);
@@ -225,6 +289,10 @@ impl TokenContract {
 
         if decimal > 18 {
             panic_with_error!(&env, TokenError::InvalidDecimals);
+        }
+
+        if fee_bps > MAX_FEE_BPS {
+            panic_with_error!(&env, TokenError::InvalidFeeBps);
         }
 
         if let Some(cap) = max_supply {
@@ -256,8 +324,15 @@ impl TokenContract {
                 .set(&DataKey::ComplianceNode, &node);
         }
         if let Some(uri) = contract_uri {
+            Self::_require_valid_contract_uri(&env, &uri);
             env.storage().instance().set(&DataKey::ContractUri, &uri);
         }
+
+        // Issue #497: written exactly once, here, and never again.
+        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRecipient, &fee_recipient);
 
         // When authorization_required is enabled the admin is automatically
         // authorized so the initial supply mint succeeds.
@@ -381,7 +456,7 @@ impl TokenContract {
         if to.len() > 100 {
             panic_with_error!(&env, TokenError::BatchTooLarge);
         }
-        let ttl_ledgers = 52 * 7 * 24 * 60 / 5; // ~52 weeks (assuming 5-second ledgers)
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
         for i in 0..to.len() {
             let recipient = to.get(i).unwrap();
             let amount = amounts.get(i).unwrap();
@@ -400,16 +475,19 @@ impl TokenContract {
     /// Burn `amount` tokens from the caller's own balance. Refuses to
     /// run when the account is frozen so a holder cannot dodge a freeze
     /// by destroying tokens.
+    ///
+    /// **Alias for `burn`, not a second implementation of it.** `burn` is the
+    /// SEP-41 entry point; this name is not, and it is not on the standard
+    /// for any wallet to discover. The two were byte-identical including their
+    /// doc comments, which made the choice between them arbitrary at the API
+    /// surface and doubled the test suite over one body (#107, #468).
+    ///
+    /// Retained because the launchpad's own UI calls this name
+    /// (`buildBurnTransaction` in `frontend/lib/stellar.ts`). Forwarding keeps
+    /// that working with `burn` as the single implementation and `burn`'s
+    /// suite as the single test suite.
     pub fn burn_self(env: Env, from: Address, amount: i128) {
-        Self::_check_paused(&env);
-        from.require_auth();
-        if amount <= 0 {
-            panic_with_error!(&env, TokenError::InvalidAmount);
-        }
-        if Self::_is_frozen(&env, &from) {
-            panic_with_error!(&env, TokenError::Frozen);
-        }
-        Self::_burn(&env, &from, amount);
+        Self::burn(env, from, amount)
     }
 
     /// Propose a new admin. Must be called by the current admin.
@@ -492,8 +570,11 @@ impl TokenContract {
     /// - The Admin storage entry is removed and a `Locked` flag is set.
     /// - `is_locked()` returns `true` from then on.
     ///
-    /// Holders can still `transfer`, `approve`, `transfer_from`, `burn`,
-    /// and `burn_self`. The token becomes trustless / immutable.
+    /// A configured compliance node must be cleared first. Its failure mode is
+    /// fail-closed, and no administrator remains after this call to clear it.
+    /// Once revocation succeeds, holders can still `transfer`, `approve`,
+    /// `transfer_from`, `burn`, and `burn_self`; the token becomes trustless /
+    /// immutable.
     ///
     /// Any max-balance-per-account cap set via
     /// [`set_max_balance_per_account`](Self::set_max_balance_per_account) is
@@ -502,6 +583,9 @@ impl TokenContract {
     /// **This action is irreversible.**
     pub fn revoke_admin(env: Env) {
         Self::_require_admin(&env);
+        if env.storage().instance().has(&DataKey::ComplianceNode) {
+            panic_with_error!(&env, TokenError::ComplianceNodeMustBeCleared);
+        }
         env.storage().instance().set(&DataKey::Locked, &true);
         env.storage().instance().remove(&DataKey::Admin);
         env.storage().instance().remove(&DataKey::PendingAdmin);
@@ -518,9 +602,9 @@ impl TokenContract {
     /// pull tokens from a frozen account back to the admin.
     pub fn freeze_account(env: Env, addr: Address) {
         Self::_require_admin(&env);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Frozen(addr.clone()), &true);
+        let key = DataKey::Frozen(addr.clone());
+        env.storage().persistent().set(&key, &true);
+        Self::_touch_policy_entry(&env, &key);
         env.events().publish((symbol_short!("freeze"), addr), ());
     }
 
@@ -551,9 +635,9 @@ impl TokenContract {
     /// `authorization_required` is enabled. Admin only.
     pub fn authorize_holder(env: Env, holder: Address) {
         Self::_require_admin(&env);
-        env.storage()
-            .persistent()
-            .set(&DataKey::AuthorizedHolder(holder.clone()), &true);
+        let key = DataKey::AuthorizedHolder(holder.clone());
+        env.storage().persistent().set(&key, &true);
+        Self::_touch_policy_entry(&env, &key);
         env.events()
             .publish((symbol_short!("authorize"), holder), ());
     }
@@ -588,15 +672,20 @@ impl TokenContract {
         if !required {
             return true;
         }
-        env.storage()
-            .persistent()
-            .get(&DataKey::AuthorizedHolder(holder))
-            .unwrap_or(false)
+        let key = DataKey::AuthorizedHolder(holder);
+        let authorized = env.storage().persistent().get(&key).unwrap_or(false);
+        if authorized {
+            Self::_touch_policy_entry(&env, &key);
+        }
+        authorized
     }
 
     /// Returns `true` if this token requires holders to be authorized before
     /// receiving transfers.
     pub fn authorization_required(env: Env) -> bool {
+        if Self::is_locked(env.clone()) {
+            return false;
+        }
         env.storage()
             .instance()
             .get(&DataKey::AuthorizationRequired)
@@ -650,8 +739,12 @@ impl TokenContract {
 
     /// Set or update the contract URI pointing to off-chain metadata JSON.
     /// Admin only.
+    ///
+    /// Only `https://` and `ipfs://` URIs of at most `MAX_CONTRACT_URI_LEN`
+    /// bytes are accepted; anything else panics with `InvalidContractUri`.
     pub fn update_contract_uri(env: Env, uri: String) {
         Self::_require_admin(&env);
+        Self::_require_valid_contract_uri(&env, &uri);
         env.storage().instance().set(&DataKey::ContractUri, &uri);
         env.events().publish((symbol_short!("upd_uri"),), uri);
     }
@@ -904,6 +997,16 @@ impl TokenContract {
             .unwrap_or_else(|| panic_with_error!(&env, TokenError::NotInitialized))
     }
 
+    /// Returns the current administrator without treating an intentionally
+    /// locked token as an error. `admin()` remains the strict compatibility
+    /// view for callers that require an active administrator.
+    pub fn admin_if_any(env: Env) -> Option<Address> {
+        if Self::is_locked(env.clone()) {
+            return None;
+        }
+        env.storage().instance().get(&DataKey::Admin)
+    }
+
     /// Returns the address proposed via `propose_admin` that has not yet
     /// accepted the role, or `None` when no two-step transfer is in
     /// progress. The entry is written by `propose_admin` and cleared by
@@ -978,6 +1081,8 @@ impl TokenContract {
             .unwrap_or(false)
     }
 
+    /// Returns the immutable supply ceiling recorded at initialization.
+    /// It remains useful after admin revocation as a historical token fact.
     pub fn max_supply(env: Env) -> Option<i128> {
         env.storage().instance().get(&DataKey::MaxSupply)
     }
@@ -1081,36 +1186,203 @@ impl TokenContract {
             .unwrap_or(false)
     }
 
-    /// Returns the contract metadata URI, if one has been configured.
+    /// Returns the contract metadata URI, if one has been configured. The URI
+    /// remains readable after locking because it is historical metadata, not
+    /// an active administrative policy.
     pub fn contract_uri(env: Env) -> Option<String> {
         env.storage().instance().get(&DataKey::ContractUri)
     }
 
     /// Returns the configured compliance node, if any.
     pub fn compliance_node(env: Env) -> Option<Address> {
+        if Self::is_locked(env.clone()) {
+            return None;
+        }
         env.storage()
             .instance()
             .get(&DataKey::ComplianceNode)
             .unwrap_or(None)
     }
 
+    // ── Launch seal (#493) ──────────────────────────────────────────────
+
+    /// Record that this launch reached the issuer's definition of success.
+    /// Admin only, and can only be called once.
+    ///
+    /// `commitment` is an opaque 32-byte value chosen by the issuer (e.g. the
+    /// hash of a published success criterion). The ledger sequence and total
+    /// supply at the moment of sealing are stored alongside it, giving
+    /// indexers an objective, on-chain signal to sort launches by.
+    pub fn launch_seal(env: Env, commitment: BytesN<32>) {
+        Self::_require_admin(&env);
+        if env.storage().instance().has(&DataKey::LaunchSeal) {
+            panic!("launch already sealed");
+        }
+
+        let seal = LaunchSeal {
+            commitment,
+            ledger: env.ledger().sequence(),
+            supply: Self::total_supply(env.clone()),
+        };
+        env.storage().instance().set(&DataKey::LaunchSeal, &seal);
+
+        env.events().publish(
+            (symbol_short!("seal"),),
+            (seal.commitment, seal.ledger, seal.supply),
+        );
+    }
+
+    /// Returns `true` once `launch_seal` has been called.
+    pub fn sealed(env: Env) -> bool {
+        env.storage().instance().has(&DataKey::LaunchSeal)
+    }
+
+    /// Returns the seal record, or `None` if the launch has not been sealed.
+    pub fn launch_seal_info(env: Env) -> Option<LaunchSeal> {
+        env.storage().instance().get(&DataKey::LaunchSeal)
+    }
+
+    // ── Continuous vesting streams (#168) ───────────────────────────────
+
+    /// Create a continuous-vesting stream for `recipient`. Admin only.
+    ///
+    /// `total` accrues linearly from `start_ledger` to `end_ledger`, and the
+    /// recipient may release accrued tokens with `claim_stream` up to
+    /// `max_per_claim` per call. The bound is what keeps a single authorised
+    /// invocation from draining the contract.
+    pub fn stream_grant(
+        env: Env,
+        recipient: Address,
+        total: i128,
+        start_ledger: u32,
+        end_ledger: u32,
+        max_per_claim: i128,
+    ) {
+        Self::_require_admin(&env);
+        if total <= 0 || max_per_claim <= 0 || end_ledger <= start_ledger {
+            panic_with_error!(&env, TokenError::InvalidStreamSchedule);
+        }
+
+        let stream = Stream {
+            total,
+            start_ledger,
+            end_ledger,
+            max_per_claim,
+            released: 0,
+        };
+        let key = DataKey::Stream(recipient.clone());
+        env.storage().persistent().set(&key, &stream);
+        Self::_touch_policy_entry(&env, &key);
+
+        env.events().publish(
+            (symbol_short!("stream"), recipient),
+            (total, start_ledger, end_ledger, max_per_claim),
+        );
+    }
+
+    /// Release accrued tokens to `recipient` against a scoped authorisation.
+    ///
+    /// The recipient pre-authorises a bounded claim range once, off-chain;
+    /// a relayer submits the claim, and `require_auth_for_args` makes the
+    /// host enforce that the signature covers exactly `(recipient,
+    /// from_ledger, to_ledger)` before the contract pays
+    /// `accrued(to_ledger) - released`, capped at the schedule's
+    /// `max_per_claim`.
+    pub fn claim_stream(env: Env, recipient: Address, from_ledger: u32, to_ledger: u32) {
+        Self::_check_paused(&env);
+
+        let key = DataKey::Stream(recipient.clone());
+        let mut stream: Stream = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| panic_with_error!(&env, TokenError::NoStream));
+
+        // The recipient's signature must cover exactly this claim range.
+        recipient.require_auth_for_args((recipient.clone(), from_ledger, to_ledger).into_val(&env));
+
+        let accrued_to = Self::_stream_accrued_at(&stream, to_ledger);
+        let claimable = accrued_to
+            .checked_sub(stream.released)
+            .expect("stream released exceeds accrued");
+        if claimable <= 0 {
+            return;
+        }
+        let payout = claimable.min(stream.max_per_claim);
+
+        stream.released = stream
+            .released
+            .checked_add(payout)
+            .expect("stream released overflow");
+        env.storage().persistent().set(&key, &stream);
+        Self::_touch_policy_entry(&env, &key);
+
+        Self::_mint(&env, &recipient, payout);
+        let ttl_ledgers = Self::_ttl_ledgers(&env);
+        let balance_key = DataKey::Balance(recipient.clone());
+        env.storage()
+            .persistent()
+            .extend_ttl(&balance_key, ttl_ledgers, ttl_ledgers);
+
+        env.events().publish(
+            (symbol_short!("claim"), recipient),
+            (payout, from_ledger, to_ledger),
+        );
+    }
+
+    /// Pure-arithmetic view of how much has accrued to `recipient` by
+    /// `ledger`. Never touches the token, so it is safe to call while the
+    /// contract is paused or the recipient is frozen (#168).
+    pub fn stream_accrued(env: Env, recipient: Address, ledger: u32) -> i128 {
+        let stream: Stream = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Stream(recipient))
+            .unwrap_or_else(|| panic_with_error!(&env, TokenError::NoStream));
+        Self::_stream_accrued_at(&stream, ledger)
+    }
+
+    /// Returns the schedule for `recipient`, or `None` if none exists.
+    pub fn stream_info(env: Env, recipient: Address) -> Option<Stream> {
+        env.storage().persistent().get(&DataKey::Stream(recipient))
+    }
+
+    /// Linear accrual of `stream.total` between `start_ledger` and
+    /// `end_ledger`, clamped at both ends. Pure arithmetic.
+    fn _stream_accrued_at(stream: &Stream, ledger: u32) -> i128 {
+        if ledger <= stream.start_ledger {
+            return 0;
+        }
+        if ledger >= stream.end_ledger {
+            return stream.total;
+        }
+        let elapsed = (ledger - stream.start_ledger) as i128;
+        let duration = (stream.end_ledger - stream.start_ledger) as i128;
+        stream
+            .total
+            .checked_mul(elapsed)
+            .expect("stream accrual overflow")
+            / duration
+    }
+
     // ── Internal helpers ────────────────────────────────────────────────
 
     fn _check_authorized(env: &Env, holder: &Address) {
+        if Self::is_locked(env.clone()) {
+            return;
+        }
         let required: bool = env
             .storage()
             .instance()
             .get(&DataKey::AuthorizationRequired)
             .unwrap_or(false);
         if required {
-            let authorized: bool = env
-                .storage()
-                .persistent()
-                .get(&DataKey::AuthorizedHolder(holder.clone()))
-                .unwrap_or(false);
+            let key = DataKey::AuthorizedHolder(holder.clone());
+            let authorized: bool = env.storage().persistent().get(&key).unwrap_or(false);
             if !authorized {
                 panic_with_error!(env, TokenError::NotAuthorizedHolder);
             }
+            Self::_touch_policy_entry(env, &key);
         }
     }
 
@@ -1122,6 +1394,30 @@ impl TokenContract {
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(env, TokenError::Locked));
         admin.require_auth();
+    }
+
+    /// Reject any contract URI that is not a bounded `https://` or `ipfs://`
+    /// URI. Frontends render this value as a link, so a `javascript:` or
+    /// `data:` URI stored here would be a stored XSS against every visitor.
+    /// The scheme match is ASCII case-insensitive, as URI schemes are, and
+    /// whitespace / control bytes are refused anywhere in the string.
+    fn _require_valid_contract_uri(env: &Env, uri: &String) {
+        let len = uri.len();
+        if len == 0 || len > MAX_CONTRACT_URI_LEN {
+            panic_with_error!(env, TokenError::InvalidContractUri);
+        }
+        let mut buf = [0u8; MAX_CONTRACT_URI_LEN as usize];
+        let bytes = &mut buf[..len as usize];
+        uri.copy_into_slice(bytes);
+
+        let has_scheme = |scheme: &[u8]| {
+            bytes.len() > scheme.len() && bytes[..scheme.len()].eq_ignore_ascii_case(scheme)
+        };
+        let allowed_scheme = has_scheme(b"https://") || has_scheme(b"ipfs://");
+        let printable = bytes.iter().all(|b| *b > 0x20 && *b != 0x7f);
+        if !allowed_scheme || !printable {
+            panic_with_error!(env, TokenError::InvalidContractUri);
+        }
     }
 
     /// The TTL to request for a persistent entry: our desired window, capped
@@ -1136,6 +1432,16 @@ impl TokenContract {
         TTL_LEDGERS.min(env.storage().max_ttl())
     }
 
+    /// Keep a persistent compliance-policy entry alive after it is written or
+    /// successfully read. Blacklist and allowlist keys share this helper so a
+    /// new policy cannot silently fall back to the host's short minimum TTL.
+    fn _touch_policy_entry(env: &Env, key: &DataKey) {
+        let ttl_ledgers = Self::_ttl_ledgers(env);
+        env.storage()
+            .persistent()
+            .extend_ttl(key, ttl_ledgers, ttl_ledgers);
+    }
+
     fn _require_not_locked(env: &Env) {
         let locked: bool = env
             .storage()
@@ -1148,10 +1454,12 @@ impl TokenContract {
     }
 
     fn _is_frozen(env: &Env, addr: &Address) -> bool {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Frozen(addr.clone()))
-            .unwrap_or(false)
+        let key = DataKey::Frozen(addr.clone());
+        let frozen = env.storage().persistent().get(&key).unwrap_or(false);
+        if frozen {
+            Self::_touch_policy_entry(env, &key);
+        }
+        frozen
     }
 
     fn _check_paused(env: &Env) {
@@ -1221,6 +1529,9 @@ impl TokenContract {
     /// | `clawback` | yes | forced holder-to-admin value movement |
     /// | `burn`, `burn_admin`, `burn_self` | no | destroys tokens; there is no recipient to gate, and gating burns would let a failing node trap holders' balances |
     fn _check_compliance(env: &Env, from: &Address, to: &Address) {
+        if Self::is_locked(env.clone()) {
+            return;
+        }
         let compliance_node: Option<Address> = env
             .storage()
             .instance()
@@ -1249,6 +1560,9 @@ impl TokenContract {
     /// answering via `can_trade(to, to)` instead, so existing deployments
     /// keep working without a redeploy.
     fn _check_compliance_issue(env: &Env, to: &Address) {
+        if Self::is_locked(env.clone()) {
+            return;
+        }
         let compliance_node: Option<Address> = env
             .storage()
             .instance()
@@ -1323,6 +1637,68 @@ impl TokenContract {
             .publish((symbol_short!("mint"), admin, to.clone()), amount);
     }
 
+    /// Consume `amount` of `spender`'s allowance on `from`.
+    ///
+    /// `transfer_from` and `burn_from` differ only in what they do with the
+    /// tokens afterwards, but the whole allowance path — the guard, the
+    /// temporary-storage read, the expiry comparison, the remaining-allowance
+    /// rewrite, the `max_ttl` clamp and the zero-case removal — is identical
+    /// and used to be written out twice. That duplication is not cosmetic: it
+    /// is why the #344 `max_ttl` clamp had to be applied in two places, and
+    /// it means any future fix to this path has to be remembered in both
+    /// functions (issue #467).
+    ///
+    /// An expired or absent entry reads as an allowance of zero, per SEP-41
+    /// ("an expired entry … should be treated as a 0 amount allowance"), so
+    /// both the `allowance` getter and this spend agree on the same rule.
+    ///
+    /// **Precondition:** the caller has already rejected `amount <= 0`. That
+    /// is what keeps the `expect` honest — with no entry the allowance is 0,
+    /// and 0 is already `< amount`, so `InsufficientAllowance` is raised
+    /// before the unwrap can be reached. A future caller that skips the
+    /// positive-amount check would turn it into a panic instead.
+    ///
+    /// Note this preserves `expiration_ledger` on a partial spend, so a
+    /// spender cannot extend an allowance's life by spending it — SEP-41:
+    /// "Reduces the allowance by `amount` without changing when it expires."
+    fn _spend_allowance(env: &Env, spender: &Address, from: &Address, amount: i128) {
+        let key = DataKey::Allowance(from.clone(), spender.clone());
+        let current_ledger = env.ledger().sequence();
+        let stored: Option<AllowanceValue> = env.storage().temporary().get(&key);
+        let allowance = match &stored {
+            Some(v) if v.expiration_ledger >= current_ledger => v.amount,
+            _ => 0,
+        };
+        if allowance < amount {
+            panic_with_error!(env, TokenError::InsufficientAllowance);
+        }
+
+        let remaining = allowance - amount;
+        let expiration_ledger = stored.expect("allowance checked above").expiration_ledger;
+        if remaining > 0 {
+            let value = AllowanceValue {
+                amount: remaining,
+                expiration_ledger,
+            };
+            env.storage().temporary().set(&key, &value);
+            // Clamp to max_ttl so the host does not reject the extend_ttl call
+            // for temporary entries whose expiration_ledger was approved past
+            // the network ceiling (fixes the partial-spend revert — see #344).
+            let ttl_ledgers =
+                (expiration_ledger.saturating_sub(current_ledger)).min(env.storage().max_ttl());
+            if ttl_ledgers > 0 {
+                env.storage()
+                    .temporary()
+                    .extend_ttl(&key, ttl_ledgers, ttl_ledgers);
+            }
+        } else {
+            // Spending the allowance down to zero is a revocation, so the
+            // entry is removed rather than left as a 0-amount, still-dated
+            // record.
+            env.storage().temporary().remove(&key);
+        }
+    }
+
     fn _burn(env: &Env, from: &Address, amount: i128) {
         let key = DataKey::Balance(from.clone());
         let balance: i128 = env.storage().persistent().get(&key).unwrap_or(0);
@@ -1392,6 +1768,16 @@ impl TokenContract {
             panic_with_error!(env, TokenError::InsufficientBalance);
         }
 
+        // Immutable fee (issue #497). Read once; both keys were written in
+        // `initialize`. fee_bps == 0 makes this a complete no-op.
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let fee: i128 = if fee_bps == 0 {
+            0
+        } else {
+            amount * (fee_bps as i128) / 10_000
+        };
+        let net = amount - fee;
+
         env.storage()
             .persistent()
             .set(&from_key, &(from_balance - amount));
@@ -1409,7 +1795,7 @@ impl TokenContract {
             .get(&DataKey::TotalSupply)
             .unwrap_or(0);
 
-        let new_to_balance = to_balance.checked_add(amount).expect("balance overflow");
+        let new_to_balance = to_balance.checked_add(net).expect("balance overflow");
 
         Self::_enforce_max_balance_per_account(env, to, new_to_balance, supply);
 
@@ -1423,6 +1809,28 @@ impl TokenContract {
             (symbol_short!("transfer"), from.clone(), to.clone()),
             amount,
         );
+
+        if fee > 0 {
+            let fee_recipient: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::FeeRecipient)
+                .expect("FeeRecipient missing");
+            let fee_key = DataKey::Balance(fee_recipient);
+            let fee_balance: i128 = env.storage().persistent().get(&fee_key).unwrap_or(0);
+            env.storage().persistent().set(
+                &fee_key,
+                &fee_balance.checked_add(fee).expect("fee balance overflow"),
+            );
+            env.storage()
+                .persistent()
+                .extend_ttl(&fee_key, ttl_ledgers, ttl_ledgers);
+
+            env.events().publish(
+                (symbol_short!("fee_coll"), from.clone(), to.clone()),
+                (amount, fee),
+            );
+        }
     }
 }
 
@@ -1590,12 +1998,14 @@ mod test {
     // activity. `scripts/generate_events_doc.py --check` re-derives this
     // same set directly from source and fails CI if it and
     // `docs/events.json` disagree.
-    const EXPECTED_TOPICS: [&str; 22] = [
+    const EXPECTED_TOPICS: [&str; 26] = [
         "approve",
         "authorize",
         "burn",
+        "claim",
         "clawback",
         "cncl_adm",
+        "fee_coll",
         "freeze",
         "init",
         "mint",
@@ -1604,10 +2014,12 @@ mod test {
         "rev_auth",
         "revoked",
         "rvk_rvc",
+        "seal",
         "set_admin",
         "set_areq",
         "set_cnode",
         "set_max_b",
+        "stream",
         "transfer",
         "unfreeze",
         "unpause",
@@ -1737,6 +2149,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         (env, client, admin, user)
@@ -1840,6 +2254,8 @@ mod test {
                 &false,
                 &None,
                 &None,
+                &0u32,
+                &admin,
             ),
             Err(Ok(TokenError::AlreadyInitialized.into()))
         );
@@ -1872,12 +2288,53 @@ mod test {
         );
     }
 
+    /// `burn_self` is a non-SEP-41 alias for `burn` (#468). Its only purpose is
+    /// to keep the name working for the launchpad's own UI, which calls it
+    /// from `buildBurnTransaction` in `frontend/lib/stellar.ts` — so the thing
+    /// worth testing is that it still reaches `burn`, not that it has its own
+    /// behaviour. `test_burn` and the rest of that suite cover the behaviour
+    /// itself; the five near-duplicate `burn_self` suites that used to sit
+    /// alongside them were deleted.
     #[test]
-    fn test_burn_self() {
-        let (_, client, _, user) = setup();
-        client.mint(&user, &1000i128);
-        client.burn_self(&user, &500i128);
-        assert_eq!(client.balance(&user), 500i128);
+    fn test_burn_self_forwards_to_burn() {
+        let (env, client, admin, user) = setup();
+        client.transfer(&admin, &user, &1_000i128);
+
+        let supply_before = client.total_supply();
+        client.burn_self(&user, &400i128);
+
+        assert_eq!(client.balance(&user), 600i128);
+        assert_eq!(client.total_supply(), supply_before - 400i128);
+        assert_eq!(client.total_burned(), 400i128);
+
+        // Same rejection paths as `burn`, because it is the same code path.
+        assert_eq!(
+            client.try_burn_self(&user, &0i128),
+            Err(Ok(TokenError::InvalidAmount.into()))
+        );
+        client.freeze_account(&user);
+        assert_eq!(
+            client.try_burn_self(&user, &100i128),
+            Err(Ok(TokenError::Frozen.into()))
+        );
+
+        // The forwarded call really is `burn`: the same failure surfaces for
+        // both, which is the whole point of collapsing them.
+        let other = Address::generate(&env);
+        client.transfer(&admin, &other, &10i128);
+        assert_eq!(
+            client.try_burn_self(&other, &0i128),
+            client.try_burn(&other, &0i128)
+        );
+    }
+
+    #[test]
+    fn test_burn_rejects_zero() {
+        let (_, client, admin, _) = setup();
+        assert_eq!(
+            client.try_burn(&admin, &0i128),
+            Err(Ok(TokenError::InvalidAmount.into()))
+        );
     }
 
     #[test]
@@ -2013,49 +2470,6 @@ mod test {
     }
 
     #[test]
-    fn test_burn_self_reduces_balance_and_supply() {
-        let (_, client, admin, user) = setup();
-        // Admin sends some tokens to user, who then burns them themselves.
-        client.transfer(&admin, &user, &5_000_000_000_i128);
-        let supply_before = client.total_supply();
-
-        client.burn_self(&user, &2_000_000_000_i128);
-
-        assert_eq!(client.balance(&user), 3_000_000_000_i128);
-        assert_eq!(client.total_supply(), supply_before - 2_000_000_000_i128);
-    }
-
-    #[test]
-    fn test_burn_self_rejects_zero() {
-        let (_, client, _, user) = setup();
-        assert_eq!(
-            client.try_burn_self(&user, &0i128),
-            Err(Ok(TokenError::InvalidAmount.into()))
-        );
-    }
-
-    #[test]
-    fn test_burn_self_insufficient_balance() {
-        let (_, client, _, user) = setup();
-        // user has zero balance; should fail.
-        assert_eq!(
-            client.try_burn_self(&user, &1i128),
-            Err(Ok(TokenError::InsufficientBalance.into()))
-        );
-    }
-
-    #[test]
-    fn test_burn_self_blocked_when_frozen() {
-        let (_, client, admin, user) = setup();
-        client.transfer(&admin, &user, &1_000i128);
-        client.freeze_account(&user);
-        assert_eq!(
-            client.try_burn_self(&user, &500i128),
-            Err(Ok(TokenError::Frozen.into()))
-        );
-    }
-
-    #[test]
     fn test_burn_blocked_when_frozen() {
         let (_, client, admin, user) = setup();
         client.transfer(&admin, &user, &1_000i128);
@@ -2105,6 +2519,117 @@ mod test {
         );
     }
 
+    // ── `_spend_allowance` — the four branches of the shared allowance path ──
+    //
+    // `transfer_from` and `burn_from` both delegate here (#467), so the logic
+    // is covered once, against the helper, and each entry point's own tests
+    // only have to cover where the tokens go. The helper writes to temporary
+    // storage belonging to the contract, so it has to be driven through
+    // `env.as_contract` to get at the real entries.
+    //
+    // The two panicking branches are asserted through the public `try_*`
+    // surface rather than by calling the helper directly: that is the same
+    // panic either way, but it also lets the test prove nothing was written
+    // on the way out, which a `should_panic` test cannot check.
+
+    #[test]
+    fn test_spend_allowance_leaves_remainder_and_preserves_expiry() {
+        let (env, client, admin, _) = setup();
+        let spender = Address::generate(&env);
+        let contract_id = client.address.clone();
+
+        client.approve(&admin, &spender, &1_000i128, &1_000u32);
+
+        // Sufficient branch: a partial spend rewrites the entry at the
+        // reduced amount. SEP-41 requires the expiry to be left alone — a
+        // spender must not be able to extend an allowance's life by using it
+        // — which `allowance()` alone cannot show, because it reports 0 for
+        // an expired entry as well as for a missing one.
+        env.as_contract(&contract_id, || {
+            TokenContract::_spend_allowance(&env, &spender, &admin, 400i128);
+        });
+
+        assert_eq!(client.allowance(&admin, &spender), 600i128);
+        env.as_contract(&contract_id, || {
+            let stored: Option<AllowanceValue> = env
+                .storage()
+                .temporary()
+                .get(&DataKey::Allowance(admin.clone(), spender.clone()));
+            let stored = stored.expect("a partial spend must leave an entry behind");
+            assert_eq!(stored.amount, 600i128);
+            assert_eq!(stored.expiration_ledger, 1_000u32);
+        });
+    }
+
+    #[test]
+    fn test_spend_allowance_zeroing_out_removes_the_entry() {
+        let (env, client, admin, _) = setup();
+        let spender = Address::generate(&env);
+        let contract_id = client.address.clone();
+
+        client.approve(&admin, &spender, &500i128, &1_000u32);
+
+        // Zeroing branch: spending the allowance down to exactly zero is a
+        // revocation, so the entry is deleted rather than left behind as a
+        // 0-amount record with a live expiry. `allowance()` returns 0 for
+        // both shapes, so the removal itself has to be asserted.
+        env.as_contract(&contract_id, || {
+            TokenContract::_spend_allowance(&env, &spender, &admin, 500i128);
+        });
+
+        assert_eq!(client.allowance(&admin, &spender), 0i128);
+        env.as_contract(&contract_id, || {
+            assert!(!env
+                .storage()
+                .temporary()
+                .has(&DataKey::Allowance(admin.clone(), spender.clone())));
+        });
+    }
+
+    #[test]
+    fn test_spend_allowance_rejects_insufficient_without_touching_state() {
+        let (env, client, admin, user) = setup();
+        let spender = Address::generate(&env);
+
+        // Insufficient branch: the guard fires before any write, so the
+        // allowance survives intact and no tokens move.
+        client.approve(&admin, &spender, &10i128, &1_000u32);
+        assert_eq!(
+            client.try_transfer_from(&spender, &admin, &user, &11i128),
+            Err(Ok(TokenError::InsufficientAllowance.into()))
+        );
+        assert_eq!(client.allowance(&admin, &spender), 10i128);
+        assert_eq!(client.balance(&user), 0i128);
+        assert_eq!(client.balance(&admin), 10_000_000_000_000_i128);
+    }
+
+    #[test]
+    fn test_spend_allowance_treats_expired_entry_as_zero() {
+        let (env, client, admin, user) = setup();
+        let spender = Address::generate(&env);
+
+        // Expired branch: SEP-41 says an expired entry reads as a 0 amount
+        // allowance, so the same guard as above fires — and it is the reason
+        // the helper's `expect("allowance checked above")` is safe to keep
+        // even though `stored` is `None` here.
+        client.approve(&admin, &spender, &1_000i128, &100u32);
+        env.ledger().set_sequence_number(101);
+
+        assert_eq!(client.allowance(&admin, &spender), 0i128);
+        assert_eq!(
+            client.try_transfer_from(&spender, &admin, &user, &1i128),
+            Err(Ok(TokenError::InsufficientAllowance.into()))
+        );
+
+        // A large amount fails for the same reason, not by exhausting the
+        // allowance arithmetic: the guard is the expiry, and the read is
+        // genuinely 0.
+        assert_eq!(
+            client.try_transfer_from(&spender, &admin, &user, &999_999i128),
+            Err(Ok(TokenError::InsufficientAllowance.into()))
+        );
+    }
+
     #[test]
     fn test_transfer_from_exceeds_allowance() {
         let (env, client, admin, user) = setup();
@@ -2144,10 +2669,22 @@ mod test {
         let spender = Address::generate(&env);
 
         client.approve(&admin, &spender, &10i128, &1000u32);
+        // The allowance path is now shared with `transfer_from` (#467), so a
+        // short allowance surfaces as the typed `InsufficientAllowance` rather
+        // than a panic string. Asserting the code — the same way
+        // `transfer_from`'s own test does — is what makes it a contract for
+        // clients to depend on, and it is exactly what a release WASM with
+        // panic messages stripped would report.
         assert_eq!(
             client.try_burn_from(&spender, &admin, &11i128),
             Err(Ok(TokenError::InsufficientAllowance.into()))
         );
+        // The rejected spend must leave both the allowance and the balances
+        // untouched, not half-applied.
+        assert_eq!(client.allowance(&admin, &spender), 10i128);
+        assert_eq!(client.balance(&admin), 10_000_000_000_000_i128);
+        assert_eq!(client.total_supply(), 10_000_000_000_000_i128);
+        assert_eq!(client.total_burned(), 0i128);
     }
 
     #[test]
@@ -2412,6 +2949,19 @@ mod test {
         assert_eq!(client.balance(&user), 1_000i128);
     }
 
+    #[test]
+    fn test_frozen_entry_survives_the_minimum_persistent_ttl() {
+        let (env, client, _, user) = setup();
+        let min_ttl = env.ledger().get().min_persistent_entry_ttl;
+
+        client.freeze_account(&user);
+        // A bare persistent `set` would archive at this point. The freeze
+        // policy must instead retain the clamped long-lived TTL.
+        env.ledger().set_sequence_number(min_ttl + 1);
+
+        assert!(client.is_frozen(&user));
+    }
+
     // ── Revoke admin / lock tests ───────────────────────────────────────
 
     #[test]
@@ -2423,10 +2973,35 @@ mod test {
     }
 
     #[test]
+    fn test_revoke_admin_requires_compliance_node_to_be_cleared() {
+        let (env, client, admin, user) = setup();
+        let node = register_good_node(&env);
+        client.set_compliance_node(&Some(node));
+
+        assert_eq!(
+            client.try_revoke_admin(),
+            Err(Ok(TokenError::ComplianceNodeMustBeCleared.into()))
+        );
+
+        client.set_compliance_node(&None);
+        client.revoke_admin();
+        client.transfer(&admin, &user, &1_000i128);
+        assert_eq!(client.balance(&user), 1_000i128);
+    }
+
+    #[test]
     fn test_admin_getter_after_revoke_panics() {
         let (_, client, _, _) = setup();
         client.revoke_admin();
         assert_eq!(client.try_admin(), Err(Ok(TokenError::Locked.into())));
+    }
+
+    #[test]
+    fn test_admin_if_any_distinguishes_active_and_revoked_admin() {
+        let (_, client, admin, _) = setup();
+        assert_eq!(client.admin_if_any(), Some(admin));
+        client.revoke_admin();
+        assert_eq!(client.admin_if_any(), None);
     }
 
     #[test]
@@ -2458,6 +3033,8 @@ mod test {
                 &false,
                 &None,
                 &None,
+                &0u32,
+                &admin,
             ),
             Err(Ok(TokenError::AlreadyInitialized.into()))
         );
@@ -2583,6 +3160,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         // Remove mock — only user will auth, not admin.
@@ -2698,6 +3277,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         env.mock_auths(&[soroban_sdk::testutils::MockAuth {
@@ -2734,6 +3315,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         (env, client, admin, user)
@@ -2797,6 +3380,8 @@ mod test {
                 &false,
                 &None,
                 &None,
+                &0u32,
+                &admin,
             ),
             Err(Ok(TokenError::ExceedsInitialSupply.into()))
         );
@@ -2846,9 +3431,99 @@ mod test {
             &false,
             &None,
             &Some(uri.clone()),
+            &0u32,
+            &admin,
         );
 
         assert_eq!(client.contract_uri(), Some(uri));
+    }
+
+    #[test]
+    fn test_update_contract_uri_accepts_https_and_ipfs() {
+        let (env, client, _, _) = setup();
+        for raw in [
+            "https://example.com/token-metadata.json",
+            "HTTPS://example.com/meta.json",
+            "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi/metadata.json",
+        ] {
+            let uri = String::from_str(&env, raw);
+            client.update_contract_uri(&uri);
+            assert_eq!(client.contract_uri(), Some(uri));
+        }
+    }
+
+    #[test]
+    fn test_update_contract_uri_rejects_unsafe_uris() {
+        let (env, client, _, _) = setup();
+        for raw in [
+            "javascript:alert(1)",
+            "JavaScript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "http://example.com/meta.json",
+            "https:example.com",
+            "https://",
+            " https://example.com",
+            "https://example.com/a b",
+            "https://example.com/\n",
+            "",
+        ] {
+            assert_eq!(
+                client.try_update_contract_uri(&String::from_str(&env, raw)),
+                Err(Ok(TokenError::InvalidContractUri.into())),
+                "expected {raw:?} to be rejected"
+            );
+        }
+        assert_eq!(client.contract_uri(), None);
+    }
+
+    /// An `https://` URI of exactly `len` bytes.
+    fn https_uri_of_len(env: &Env, len: usize) -> String {
+        let mut buf = [b'a'; 2 * MAX_CONTRACT_URI_LEN as usize];
+        let prefix = b"https://example.com/";
+        buf[..prefix.len()].copy_from_slice(prefix);
+        String::from_bytes(env, &buf[..len])
+    }
+
+    #[test]
+    fn test_update_contract_uri_length_bound() {
+        let (env, client, _, _) = setup();
+        let max = MAX_CONTRACT_URI_LEN as usize;
+
+        let at_limit = https_uri_of_len(&env, max);
+        client.update_contract_uri(&at_limit);
+        assert_eq!(client.contract_uri(), Some(at_limit.clone()));
+
+        assert_eq!(
+            client.try_update_contract_uri(&https_uri_of_len(&env, max + 1)),
+            Err(Ok(TokenError::InvalidContractUri.into()))
+        );
+        assert_eq!(client.contract_uri(), Some(at_limit));
+    }
+
+    #[test]
+    fn test_initialize_rejects_unsafe_contract_uri() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(TokenContract, ());
+        let client = TokenContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+
+        let result = client.try_initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "TestToken"),
+            &String::from_str(&env, "TST"),
+            &0i128,
+            &None,
+            &false,
+            &false,
+            &None,
+            &Some(String::from_str(&env, "javascript:alert(1)")),
+            &0u32,
+            &admin,
+        );
+
+        assert_eq!(result, Err(Ok(TokenError::InvalidContractUri.into())));
     }
     // ── Upgrade tests ───────────────────────────────────────────────────
 
@@ -2882,6 +3557,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         let non_zero_hash = BytesN::from_array(&env, &[1; 32]);
@@ -2921,6 +3598,8 @@ mod test {
             &true,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         (env, client, admin, user)
@@ -2931,6 +3610,15 @@ mod test {
         let (_, client, _, _) = setup_with_auth_required();
         assert!(client.authorization_required());
         assert!(client.authorization_revocable());
+    }
+
+    #[test]
+    fn test_authorization_required_is_masked_after_revoke() {
+        let (_, client, admin, user) = setup_with_auth_required();
+        client.revoke_admin();
+        assert!(!client.authorization_required());
+        client.transfer(&admin, &user, &1_000i128);
+        assert_eq!(client.balance(&user), 1_000i128);
     }
 
     #[test]
@@ -2968,6 +3656,19 @@ mod test {
         assert!(client.is_authorized(&user));
         client.transfer(&admin, &user, &1_000_000_000_i128);
         assert_eq!(client.balance(&user), 1_000_000_000_i128);
+    }
+
+    #[test]
+    fn test_authorized_holder_survives_the_minimum_persistent_ttl() {
+        let (env, client, _, user) = setup_with_auth_required();
+        let min_ttl = env.ledger().get().min_persistent_entry_ttl;
+
+        client.authorize_holder(&user);
+        // A newly written persistent allowlist entry only gets this short
+        // lifetime unless authorize_holder extends it explicitly.
+        env.ledger().set_sequence_number(min_ttl + 1);
+
+        assert!(client.is_authorized(&user));
     }
 
     #[test]
@@ -3055,6 +3756,8 @@ mod test {
             &false, // revocable = false from deploy
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         assert_eq!(
@@ -3094,6 +3797,8 @@ mod test {
             &false, // revocable = false
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         client.authorize_holder(&user);
@@ -3269,6 +3974,21 @@ mod test {
 
         client.set_compliance_node(&None);
         assert_eq!(client.compliance_node(), None);
+    }
+
+    #[test]
+    fn test_compliance_node_is_masked_after_revoke() {
+        let (env, client, admin, user) = setup();
+        let node = register_good_node(&env);
+        MockComplianceNodeClient::new(&env, &node).deny(&user);
+        client.set_compliance_node(&Some(node));
+        // `revoke_admin` refuses to run while a compliance node is set, so
+        // clearing it first is required before the contract can be locked.
+        client.set_compliance_node(&None);
+        client.revoke_admin();
+        assert_eq!(client.compliance_node(), None);
+        client.transfer(&admin, &user, &1_000i128);
+        assert_eq!(client.balance(&user), 1_000i128);
     }
 
     #[test]
@@ -3520,6 +4240,117 @@ mod test {
                     ().into_val(&env)
                 )
             ]
+        );
+    }
+
+    // ── launch_seal tests (#493) ────────────────────────────────────────
+
+    #[test]
+    fn test_launch_seal_records_ledger_and_supply() {
+        use soroban_sdk::testutils::Ledger as _;
+        let (env, client, _, _) = setup();
+        assert!(!client.sealed());
+        assert_eq!(client.launch_seal_info(), None);
+
+        env.ledger().set_sequence_number(1234);
+        let commitment = BytesN::from_array(&env, &[7u8; 32]);
+        client.launch_seal(&commitment);
+        let events = env.events().all();
+
+        assert!(client.sealed());
+        assert_eq!(
+            client.launch_seal_info(),
+            Some(LaunchSeal {
+                commitment: commitment.clone(),
+                ledger: 1234,
+                supply: 10_000_000_000_000i128,
+            })
+        );
+
+        assert_eq!(
+            events,
+            soroban_sdk::vec![
+                &env,
+                (
+                    client.address.clone(),
+                    (symbol_short!("seal"),).into_val(&env),
+                    (commitment, 1234u32, 10_000_000_000_000i128).into_val(&env)
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn test_launch_seal_supply_is_frozen_at_seal_time() {
+        let (env, client, _, user) = setup();
+        client.launch_seal(&BytesN::from_array(&env, &[1u8; 32]));
+        client.mint(&user, &500i128);
+        assert_eq!(
+            client.launch_seal_info().unwrap().supply,
+            10_000_000_000_000i128
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "launch already sealed")]
+    fn test_launch_seal_only_once() {
+        let (env, client, _, _) = setup();
+        client.launch_seal(&BytesN::from_array(&env, &[1u8; 32]));
+        client.launch_seal(&BytesN::from_array(&env, &[2u8; 32]));
+    }
+
+    #[test]
+    fn test_launch_seal_fails_after_revoke_admin() {
+        let (env, client, _, _) = setup();
+        client.revoke_admin();
+        // `revoke_admin` locks the contract permanently; `launch_seal` is
+        // admin-gated, so the host rejects it with the `Locked` error.
+        assert_eq!(
+            client.try_launch_seal(&BytesN::from_array(&env, &[1u8; 32])),
+            Err(Ok(TokenError::Locked.into()))
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_launch_seal_requires_admin_auth() {
+        let env = Env::default();
+        let contract_id = env.register(TokenContract, ());
+        let client = TokenContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "TestToken"),
+            &String::from_str(&env, "TST"),
+            &0i128,
+            &None,
+            &false,
+            &false,
+            &None,
+            &None,
+            &0u32,
+            &admin,
+        );
+        env.set_auths(&[]);
+        client.launch_seal(&BytesN::from_array(&env, &[1u8; 32]));
+    }
+
+    /// Issue #497: `FeeBps` is written exactly once, inside `initialize`.
+    /// `include_str!` reads this source at compile time, so a stray
+    /// `set(&DataKey::FeeBps` outside `initialize` fails the build.
+    #[test]
+    fn no_public_fn_writes_fee_bps() {
+        const SRC: &str = include_str!("lib.rs");
+        let boundary = SRC
+            .find("#[cfg(test)]\nmod test {")
+            .expect("test module marker not found");
+        let production = &SRC[..boundary];
+        let count = production.matches("set(&DataKey::FeeBps").count();
+        assert_eq!(
+            count, 1,
+            "DataKey::FeeBps must be written exactly once (in initialize); found {count}"
         );
     }
 }

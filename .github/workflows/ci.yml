@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   contracts:
@@ -24,6 +24,39 @@ jobs:
       # compiler here is the one that produced the wasm hashes in the manifest.
       # A different rustc yields a different hash for identical source, which
       # would break on-chain contract verification.
+      - name: Verify every contract has an events.json entry
+        run: |
+          missing=0
+          for dir in contracts/*/; do
+            name=$(basename "$dir")
+            if [ "$name" = "wasm-manifest.json" ]; then continue; fi
+            if ! python3 -c "import json,sys; d=json.load(open('docs/events.json')); sys.exit(0 if '$name' in d else 1)"; then
+              echo "::error::Contract '$name' has no entry in docs/events.json"
+              missing=1
+            fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "Add the missing contract(s) to docs/events.json and regenerate docs/events.md."
+            exit 1
+          fi
+
+      - name: Reject literal persistent-entry TTLs
+        run: |
+          if rg -n 'let ttl_ledgers\s*=\s*[0-9]' contracts/token/src/lib.rs; then
+            echo 'Use TokenContract::_ttl_ledgers(&env) for persistent-entry TTLs.'
+            exit 1
+          fi
+
+      - name: Assert FeeBps is written exactly once (issue #497)
+        run: |
+          count=$(grep -c "set(&DataKey::FeeBps" contracts/token/src/lib.rs)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly 1 write to DataKey::FeeBps, found $count"
+            echo "  DataKey::FeeBps must be written only in initialize() and"
+            echo "  never again. See issue #497 for the immutable-fee design."
+            exit 1
+          fi
+
       - name: Install Rust toolchain
         run: |
           rustup show
@@ -86,9 +119,10 @@ jobs:
             manifest_key=""
             case "$name" in
               *airdrop*) manifest_key="airdrop" ;;
-              *factory*) manifest_key="factory" ;;
+              *metadata*|*registry*) manifest_key="metadata_registry" ;;
               *token*) manifest_key="token" ;;
               *vesting*) manifest_key="vesting" ;;
+              *factory*) manifest_key="factory" ;;
               *) manifest_key="$name" ;;
             esac
 
@@ -137,7 +171,7 @@ jobs:
 
             const files = fs.readdirSync(wasmDir);
             const wasmFiles = files.filter(f => f.endsWith('.wasm'));
-            
+
             let message = '### 📦 WASM Report\n\n| Contract | Size | SHA256 Hash |\n| :--- | ---: | :--- |\n';
             for (const file of wasmFiles) {
               const filePath = path.join(wasmDir, file);
@@ -147,18 +181,18 @@ jobs:
               const hash = crypto.createHash('sha256').update(buf).digest('hex');
               message += `| \`${file}\` | ${size} KB | \`${hash}\` |\n`;
             }
-            
+
             // Post result as PR comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const botComment = comments.find(comment => 
               comment.user.type === 'Bot' && comment.body.includes('WASM Report')
             );
-            
+
             if (botComment) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -175,7 +209,6 @@ jobs:
               });
             }
 
-
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -185,11 +218,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Reject NEXT_PUBLIC_ credentials in frontend source
+        # NEXT_PUBLIC_* variables are inlined into the client bundle at build
+        # time by Next.js and are visible to anyone with browser devtools.
+        # API keys, auth tokens, and secrets must NEVER use this prefix.
+        # This step fails the build if any such pattern is introduced.
+        # Pattern targets explicit credential suffixes; it does NOT match
+        # NEXT_PUBLIC_TOKEN_WASM_HASH (a public contract identifier) or
+        # similar non-sensitive names.
+        run: |
+          if grep -rn --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' \
+            -E 'NEXT_PUBLIC_.*(AUTH_TOKEN|API_KEY|ACCESS_TOKEN|SECRET|PRIVATE_KEY)' .; then
+            echo ""
+            echo "ERROR: Found a NEXT_PUBLIC_*AUTH_TOKEN/API_KEY/SECRET/PRIVATE_KEY in frontend source."
+            echo "NEXT_PUBLIC_* variables are inlined into the client JS bundle"
+            echo "and are readable by anyone with browser devtools."
+            echo "Use a server-only variable (no NEXT_PUBLIC_ prefix) and proxy"
+            echo "results through an API route (app/api/...) instead."
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies

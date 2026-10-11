@@ -94,13 +94,57 @@ export function toBaseUnits(display: number | string, decimals: number): bigint 
  *
  * This is the single authoritative inverse of `toBaseUnits`. Do NOT hand-roll
  * `Number(amount) / 10 ** decimals` in app/ or components/ — import this instead.
+ *
+ * Handles negative inputs by formatting the magnitude and re-applying the
+ * sign. JavaScript's `%` keeps the sign of the dividend, so formatting `raw`
+ * directly would mangle the fraction (e.g. `-1n` at 7 decimals becomes
+ * `0.00000-1`). This matters for deltas in the activity feed, vesting
+ * progress, and supply-breakdown segments, which can be negative.
  */
 export function fromBaseUnits(raw: bigint, decimals: number): string {
   if (decimals === 0) return raw.toString();
+
+  const negative = raw < 0n
+  const magnitude = negative ? -raw : raw
+
   const divisor = BigInt(10) ** BigInt(decimals);
-  const whole = raw / divisor;
-  const frac = raw % divisor;
-  if (frac === 0n) return whole.toString();
-  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
-  return `${whole}.${fracStr}`;
+  const whole = magnitude / divisor;
+  const frac = magnitude % divisor;
+
+  let formatted: string;
+  if (frac === 0n) {
+    formatted = whole.toString();
+  } else {
+    const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+    formatted = `${whole}.${fracStr}`;
+  }
+
+  return negative ? `-${formatted}` : formatted;
+}
+
+/**
+ * Safely convert a display amount to base units, returning a discriminated
+ * result instead of throwing. Wraps `toBaseUnits` so callers (form submit
+ * handlers, render paths) can deal with the `RangeError` as a field-level
+ * error rather than an uncaught exception.
+ *
+ * Returns `{ ok: true, value }` on success, or `{ ok: false, error }` where
+ * `error` is the original `RangeError` message.
+ */
+export type ToBaseUnitsResult =
+  | { ok: true; value: bigint }
+  | { ok: false; error: string };
+
+export function tryToBaseUnits(
+  display: number | string,
+  decimals: number,
+): ToBaseUnitsResult {
+  try {
+    return { ok: true, value: toBaseUnits(display, decimals) };
+  } catch (err) {
+    if (err instanceof RangeError) {
+      return { ok: false, error: err.message };
+    }
+    throw err;
+  }
 }

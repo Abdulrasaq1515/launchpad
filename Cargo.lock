@@ -1590,6 +1590,7 @@ dependencies = [
 name = "soroban-factory"
 version = "0.1.0"
 dependencies = [
+ "soroban-metadata-registry",
  "soroban-sdk",
  "soroban-token",
 ]
@@ -1606,6 +1607,13 @@ dependencies = [
  "soroban-env-common",
  "soroban-env-host",
  "thiserror",
+]
+
+[[package]]
+name = "soroban-metadata-registry"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

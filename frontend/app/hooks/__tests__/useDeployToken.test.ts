@@ -3,6 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import * as StellarSdk from "@stellar/stellar-sdk";
 import * as tokenBindings from "@/lib/bindings/token/src/index";
 import * as walletModule from "../useWallet";
+import * as stellarLib from "@/lib/stellar";
 import { useDeployToken } from "../useDeployToken";
 
 type AnyModule = any;
@@ -19,6 +20,9 @@ jest.mock("@stellar/stellar-sdk", () => {
     simulateResult: null,
     sendResult: null,
     getTxResult: null,
+    getTxError: null,
+    getAccountError: null,
+    latestLedgerError: null,
   };
 
   class MockAddress {
@@ -46,10 +50,22 @@ jest.mock("@stellar/stellar-sdk", () => {
   }
 
   class MockRpcServer {
-    getAccount = jest.fn(async (pk: string) => ({ id: pk, sequence: "1" }));
+    getAccount = jest.fn(async (pk: string) => {
+      if (mutable.getAccountError) throw mutable.getAccountError;
+      return { id: pk, sequence: "1" };
+    });
+    getLatestLedger = jest.fn(async () => {
+      if (mutable.latestLedgerError) throw mutable.latestLedgerError;
+      return { sequence: 1 };
+    });
     simulateTransaction = jest.fn(async () => mutable.simulateResult);
     sendTransaction = jest.fn(async () => mutable.sendResult);
-    getTransaction = jest.fn(async () => mutable.getTxResult);
+    getTransaction = jest.fn(async () => {
+      if (mutable.getTxError) throw mutable.getTxError;
+      return typeof mutable.getTxResult === "function"
+        ? mutable.getTxResult()
+        : mutable.getTxResult;
+    });
   }
 
   class MockTxBuilder {
@@ -97,6 +113,10 @@ jest.mock("@stellar/stellar-sdk", () => {
     nativeToScVal: jest.fn((v: any) => v),
   };
 });
+
+jest.mock("@/lib/stellar", () => ({
+  verifyFactory: jest.fn().mockResolvedValue({ ok: true, verified: true }),
+}));
 
 jest.mock("../useWallet", () => {
   const wallet: any = {
@@ -162,6 +182,10 @@ function resetMocks() {
   sdk.__mutable.simulateResult = { __success: true, result: { retval: {} } };
   sdk.__mutable.sendResult = { status: "PENDING", hash: "deadbeef" };
   sdk.__mutable.getTxResult = { status: "SUCCESS" };
+  sdk.__mutable.getTxError = null;
+  sdk.__mutable.getAccountError = null;
+  sdk.__mutable.latestLedgerError = null;
+  walletMock.__wallet.signTransaction.mockClear();
   tokenMock.__initialize.mockClear();
 }
 
@@ -197,6 +221,24 @@ describe("useDeployToken (factory path)", () => {
     await expect(
       act(() => result.current.deployToken(baseParams)),
     ).rejects.toMatchObject({ type: "validation" });
+  });
+
+  it("refuses to deploy when the factory fails manifest verification", async () => {
+    (stellarLib.verifyFactory as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      reason: "The factory's on-chain WASM hash does not match the audited build.",
+      expected: "aa",
+      actual: "bb",
+    });
+    const result = render();
+
+    await expect(
+      act(() => result.current.deployToken(baseParams)),
+    ).rejects.toMatchObject({
+      type: "validation",
+      message: expect.stringContaining("Expected: aa. Found: bb."),
+    });
+    expect(sdk.__contractCalls.length).toBe(0);
   });
 
   it("calls deploy_token with a valid TokenConfig and returns the token address", async () => {
@@ -251,5 +293,159 @@ describe("useDeployToken (factory path)", () => {
     expect(config.max_supply).toBeNull();
     expect(config.compliance_node).toBeNull();
     expect(config.authorization_required).toBe(false);
+  });
+
+  // ── Deploy salt (#483) ────────────────────────────────────────────────
+
+  it("draws the deploy salt from crypto.getRandomValues", async () => {
+    const getRandomValues = jest.spyOn(globalThis.crypto, "getRandomValues");
+    const mathRandom = jest.spyOn(Math, "random");
+    const result = render();
+
+    try {
+      await act(async () => {
+        await result.current.deployToken(baseParams);
+      });
+
+      expect(getRandomValues).toHaveBeenCalledTimes(1);
+      const filled = getRandomValues.mock.calls[0][0] as Uint8Array;
+      expect(filled.length).toBe(32);
+      const [, , salt] = sdk.__contractCalls[0];
+      expect(Uint8Array.from(salt)).toEqual(filled);
+      expect(mathRandom).not.toHaveBeenCalled();
+    } finally {
+      getRandomValues.mockRestore();
+      mathRandom.mockRestore();
+    }
+  });
+
+  it("refuses to deploy rather than fall back when Web Crypto is unavailable", async () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "crypto")!;
+    const mathRandom = jest.spyOn(Math, "random");
+    const result = render();
+
+    Object.defineProperty(globalThis, "crypto", { value: undefined, configurable: true });
+    try {
+      await expect(
+        act(() => result.current.deployToken(baseParams)),
+      ).rejects.toMatchObject({
+        type: "validation",
+        message: expect.stringContaining("crypto.getRandomValues"),
+      });
+    } finally {
+      Object.defineProperty(globalThis, "crypto", original);
+      mathRandom.mockRestore();
+    }
+
+    expect(mathRandom).not.toHaveBeenCalled();
+    expect(sdk.__contractCalls.length).toBe(0);
+    expect(walletMock.__wallet.signTransaction).not.toHaveBeenCalled();
+  });
+
+  // ── Source account lookup (#485) ──────────────────────────────────────
+
+  it("reports an account with no transactions yet as a validation error", async () => {
+    sdk.__mutable.getAccountError = new Error(
+      `Account not found: ${walletMock.__wallet.publicKey}`,
+    );
+    const result = render();
+
+    await expect(
+      act(() => result.current.deployToken(baseParams)),
+    ).rejects.toMatchObject({
+      type: "validation",
+      message: expect.stringContaining(
+        `Account ${walletMock.__wallet.publicKey} has no transactions on this network yet`,
+      ),
+    });
+    expect(sdk.__contractCalls.length).toBe(0);
+    expect(walletMock.__wallet.signTransaction).not.toHaveBeenCalled();
+  });
+
+  it("treats an HTTP 404 from the account lookup as a missing account", async () => {
+    sdk.__mutable.getAccountError = Object.assign(new Error("Request failed"), {
+      response: { status: 404 },
+    });
+    const result = render();
+
+    await expect(
+      act(() => result.current.deployToken(baseParams)),
+    ).rejects.toMatchObject({
+      type: "validation",
+      message: expect.stringContaining("has no transactions on this network yet"),
+    });
+  });
+
+  it("does not blame the account when the RPC itself is unreachable", async () => {
+    // stellar-sdk reports transport failures as "Account not found" too.
+    sdk.__mutable.getAccountError = new Error("Account not found: GDEPLOYER");
+    sdk.__mutable.latestLedgerError = new Error("fetch failed");
+    const result = render();
+
+    await expect(
+      act(() => result.current.deployToken(baseParams)),
+    ).rejects.toMatchObject({
+      type: "network",
+      message: expect.stringContaining("Could not load account"),
+    });
+  });
+
+  // ── Polling timeout (#484) ────────────────────────────────────────────
+
+  describe("when polling runs out", () => {
+    const POLL_BUDGET_MS = 180_000;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("keeps the simulated contract ID on a timeout for a transaction that has not settled", async () => {
+      sdk.__mutable.getTxResult = { status: "NOT_FOUND" };
+      const result = render();
+
+      const deployment = result.current.deployToken(baseParams);
+      const assertion = expect(deployment).rejects.toMatchObject({
+        type: "timeout",
+        contractId: "C-DEPLOYED-TOKEN-ADDRESS",
+        transactionHash: "deadbeef",
+        message: expect.stringContaining("has not settled after 180 seconds"),
+      });
+      await jest.advanceTimersByTimeAsync(POLL_BUDGET_MS);
+      await assertion;
+    });
+
+    it("says the RPC is unreachable when the final polls fail in transport", async () => {
+      sdk.__mutable.getTxError = new Error("fetch failed");
+      const result = render();
+
+      const deployment = result.current.deployToken(baseParams);
+      const assertion = expect(deployment).rejects.toMatchObject({
+        type: "timeout",
+        contractId: "C-DEPLOYED-TOKEN-ADDRESS",
+        transactionHash: "deadbeef",
+        message: expect.stringContaining("Could not reach the Soroban RPC"),
+      });
+      await jest.advanceTimersByTimeAsync(POLL_BUDGET_MS);
+      await assertion;
+    });
+
+    it("keeps polling past the old 60-second budget", async () => {
+      let polls = 0;
+      sdk.__mutable.getTxResult = () =>
+        ++polls > 45 ? { status: "SUCCESS" } : { status: "NOT_FOUND" };
+      const result = render();
+
+      const deployment = result.current.deployToken(baseParams);
+      await jest.advanceTimersByTimeAsync(100_000);
+
+      await expect(deployment).resolves.toEqual({
+        contractId: "C-DEPLOYED-TOKEN-ADDRESS",
+        transactionHash: "deadbeef",
+      });
+    });
   });
 });

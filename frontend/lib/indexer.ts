@@ -1,43 +1,101 @@
-import { type NetworkConfig } from "../types/network";
+﻿﻿import { type NetworkConfig } from "../types/network";
 import * as StellarSdk from "@stellar/stellar-sdk";
 
-const DEFAULT_MERCURY_BASE_URL_TESTNET =
-  process.env.NEXT_PUBLIC_MERCURY_TESTNET_URL ??
-  "https://testnet.mercurydata.app/rest";
-const DEFAULT_MERCURY_BASE_URL_MAINNET =
-  process.env.NEXT_PUBLIC_MERCURY_MAINNET_URL ??
-  "https://mainnet.mercurydata.app/rest";
-const DEFAULT_MERCURY_AUTH_TOKEN =
-  process.env.NEXT_PUBLIC_MERCURY_AUTH_TOKEN ?? "";
+// ---------------------------------------------------------------------------
+// Mercury base URLs — read from environment on the server (no NEXT_PUBLIC_
+// prefix). These constants are only used by server-side code in
+// app/api/tokens/recent/route.ts via getMercuryConfig(). Client-side callers
+// (fetchTransactionHistory, fetchAccountOperations) use the RPC fallback path
+// in fetchIndexedEvents and never read these values.
+// ---------------------------------------------------------------------------
+export const MERCURY_BASE_URL_TESTNET =
+  process.env.MERCURY_TESTNET_URL ?? "https://testnet.mercurydata.app/rest";
+export const MERCURY_BASE_URL_MAINNET =
+  process.env.MERCURY_MAINNET_URL ?? "https://mainnet.mercurydata.app/rest";
+
+/**
+ * Number of ledgers the RPC fallback window spans when no cursor is supplied.
+ * Stellar ledgers close approximately every 5 seconds, so 1000 ledgers ≈ 83 minutes.
+ */
+export const RPC_FALLBACK_WINDOW_LEDGERS = 1000;
+
+/**
+ * Approximate ledger close interval in seconds. Used to translate a ledger window
+ * into a human-readable time span for the UI.
+ */
+export const APPROX_LEDGER_INTERVAL_SECONDS = 5;
 
 export interface IndexedEvent {
   id: string;
-  ledger: number;
+  /**
+   * Ledger sequence number, or null when the upstream payload carries no
+   * ledger field under any of its known spellings. Callers must skip null-
+   * ledger events because they cannot be placed in chain order.
+   */
+  ledger: number | null;
   tx_hash: string;
-  timestamp: string;
+  /**
+   * ISO-8601 timestamp string, or null when the upstream payload carries no
+   * recognisable timestamp. Callers should render null as "—" rather than
+   * defaulting to the Unix epoch.
+   */
+  timestamp: string | null;
   topic: unknown[];
   value: unknown;
+}
+
+/** * Metadata describing the ledger window the events were retrieved from.
+ * When `truncated` is true, the events are only a slice of the contract's
+ * history and the UI must say so.
+ */
+export interface LedgerWindowInfo {
+  /** Lowest ledger sequence included in the result set. */
+  startLedger: number;
+  /** Highest ledger sequence known to the node at the time of the query. */
+  latestLedger: number;
+  /** Number of ledgers covered by this window. */
+  limitLedgers: number;
+  /** True when the window does not extend to the contract's genesis. */
+  truncated: boolean;
+  /** Source of the data. */
+  source: "mercury" | "rpc";
 }
 
 export interface FetchIndexedEventsResult {
   events: IndexedEvent[];
   nextCursor: string | null;
+  /**
+   * Information about the ledger window that produced these events. Only populated
+   * for the RPC fallback, where the window is explicitly bounded.
+   */
+  windowInfo?: LedgerWindowInfo;
 }
 
+/**
+ * Build a Mercury config from server-only environment variables.
+ *
+ * IMPORTANT: Call this only from server-side code (API routes, Server
+ * Components, server actions). The `MERCURY_AUTH_TOKEN` variable has NO
+ * `NEXT_PUBLIC_` prefix intentionally — Next.js must never inline it into
+ * the client bundle.
+ *
+ * Returns null when the token is absent so callers degrade to the RPC path.
+ */
 export function getMercuryConfig(
   config: NetworkConfig,
 ): { baseUrl: string; token: string } | null {
-  const explicitBaseUrl = process.env.NEXT_PUBLIC_MERCURY_BASE_URL;
-  const baseUrl =
-    explicitBaseUrl ??
-    (config.network === "mainnet"
-      ? DEFAULT_MERCURY_BASE_URL_MAINNET
-      : DEFAULT_MERCURY_BASE_URL_TESTNET);
-  const token = DEFAULT_MERCURY_AUTH_TOKEN;
-
+  // Deliberately NOT NEXT_PUBLIC_ — must remain server-only.
+  const token = process.env.MERCURY_AUTH_TOKEN ?? "";
   if (!token) {
     return null;
   }
+
+  const explicitBaseUrl = process.env.MERCURY_BASE_URL;
+  const baseUrl =
+    explicitBaseUrl ??
+    (config.network === "mainnet"
+      ? MERCURY_BASE_URL_MAINNET
+      : MERCURY_BASE_URL_TESTNET);
 
   return { baseUrl, token };
 }
@@ -45,6 +103,10 @@ export function getMercuryConfig(
 /**
  * Fetch events using Soroban RPC's native getEvents endpoint as a fallback
  * when Mercury indexer is not configured.
+ *
+ * When no cursor is provided the RPC can only serve a bounded ledger window.
+ * We return that window as windowInfo so callers can tell the user the history
+ * is truncated instead of presenting it as complete.
  */
 async function fetchEventsFromRpc(
   contractId: string,
@@ -55,25 +117,22 @@ async function fetchEventsFromRpc(
     limit?: number;
   } = {},
 ): Promise<FetchIndexedEventsResult> {
-  const { topics, cursor, limit = 200 } = options;
-  
+  // NOTE: the `topics` option is intentionally ignored for the RPC path.
+  // Expanding a list of N topic-0 symbols into N separate EventFilter entries
+  // breaks global ledger ordering (results are concatenated per-filter, not
+  // merged), splits the page budget across filters, and can hit the Soroban
+  // RPC per-request filter cap. Instead we fetch all events for the contract
+  // with a single contractIds filter and let callers filter by topic
+  // client-side — which they already do via decodeActivityEvent /
+  // typePath checks. See: github.com/soropad/launchpad/issues/472
+  const { cursor, limit = 200 } = options;
+
   const rpc = new StellarSdk.rpc.Server(config.rpcUrl);
 
-  // Build filters for Soroban RPC getEvents
-  const filters: StellarSdk.rpc.Api.EventFilter[] = [];
-
-  if (topics && topics.length > 0) {
-    for (const topic of topics) {
-      filters.push({
-        contractIds: [contractId],
-        topics: [[topic]],
-      });
-    }
-  } else {
-    filters.push({
-      contractIds: [contractId],
-    });
-  }
+  // Single filter: fetch all events for this contract in one ordered result set.
+  const filters: StellarSdk.rpc.Api.EventFilter[] = [
+    { contractIds: [contractId] },
+  ];
 
   // Parse cursor (format: "ledger-<sequence>") to derive startLedger.
   // GetEventsRequest uses a discriminated union: either startLedger OR cursor, never both.
@@ -88,10 +147,22 @@ async function fetchEventsFromRpc(
     }
   }
 
-  // Fall back to latest ledger when no startLedger could be derived.
+  // When no cursor is supplied we can only serve a bounded window from the RPC.
+  // Record the window so the UI can state that the history is truncated.
+  let windowInfo: LedgerWindowInfo | undefined;
   if (startLedger === undefined) {
     const ledgerInfo = await rpc.getLatestLedger();
-    startLedger = Math.max(1, ledgerInfo.sequence - 1000);
+    const latestLedger = ledgerInfo.sequence;
+    const windowStart = Math.max(1, latestLedger - RPC_FALLBACK_WINDOW_LEDGERS);
+    startLedger = windowStart;
+    windowInfo = {
+      startLedger: windowStart,
+      latestLedger,
+      limitLedgers: RPC_FALLBACK_WINDOW_LEDGERS,
+      // The window is truncated unless it actually reaches genesis.
+      truncated: windowStart > 1,
+      source: "rpc",
+    };
   }
 
   try {
@@ -117,14 +188,14 @@ async function fetchEventsFromRpc(
       };
     });
 
-    // Determine next cursor from the last event's ledger
+    // Determine next cursor from the last event's ledge
     let nextCursor: string | null = null;
     if (events.length > 0) {
       const lastEvent = events[events.length - 1];
       nextCursor = `ledger-${lastEvent.ledger}`;
     }
 
-    return { events, nextCursor };
+    return { events, nextCursor, windowInfo };
   } catch (error) {
     console.error("Soroban RPC getEvents failed:", error);
     throw new Error(
@@ -235,15 +306,15 @@ function normalizeEvent(raw: unknown): IndexedEvent {
         ? String(e.id ?? e.event_id)
         : "";
 
-  const ledger =
-    typeof (e.ledger ?? e.ledger_seq ?? e.ledger_sequence ?? e.ledgerSequence) ===
-    "number"
-      ? Number(
-          e.ledger ?? e.ledger_seq ?? e.ledger_sequence ?? e.ledgerSequence,
-        )
-      : Number(
-          e.ledger ?? e.ledger_seq ?? e.ledger_sequence ?? e.ledgerSequence,
-        ) || 0;
+  // Collapse the four known spellings into one candidate value.
+  // If none is present (candidate is undefined/null) or the coercion yields
+  // NaN, the ledger is genuinely unknown — return null so callers can skip
+  // the event rather than silently treating it as ledger 0.
+  const ledgerCandidate =
+    e.ledger ?? e.ledger_seq ?? e.ledger_sequence ?? e.ledgerSequence;
+  const ledgerNum = Number(ledgerCandidate);
+  const ledger: number | null =
+    ledgerCandidate != null && !isNaN(ledgerNum) ? ledgerNum : null;
 
   const tx_hash =
     typeof (e.tx_hash ?? e.txHash ?? e.hash) === "string"
@@ -256,13 +327,15 @@ function normalizeEvent(raw: unknown): IndexedEvent {
     e.ledgerTimestamp ??
     e.created_at ??
     e.createdAt;
-  let timestamp: string;
+  let timestamp: string | null;
   if (typeof rawTs === "string") {
     timestamp = rawTs;
   } else if (typeof rawTs === "number") {
     timestamp = new Date(rawTs * 1000).toISOString();
   } else {
-    timestamp = new Date(0).toISOString();
+    // No recognisable timestamp field — return null so callers can render
+    // "—" instead of defaulting to the Unix epoch (1970-01-01).
+    timestamp = null;
   }
 
   const topic: unknown[] = Array.isArray(e.topic)

@@ -12,3 +12,4 @@ soroban-sdk = { version = "27", features = ["alloc"] }
 [dev-dependencies]
 soroban-sdk = { version = "27", features = ["testutils"] }
 soroban-token = { path = "../token" }
+soroban-metadata-registry = { path = "../metadata-registry" }

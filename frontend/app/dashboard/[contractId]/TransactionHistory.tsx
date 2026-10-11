@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Download, FileText, Loader2, AlertCircle, ChevronDown } from "lucide-react";
+import { Download, FileText, Loader2, AlertCircle, ChevronDown, Info } from "lucide-react";
 import {
     formatTokenAmount,
     truncateAddress,
@@ -28,6 +28,7 @@ export default function TransactionHistory({
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showExportOptions, setShowExportOptions] = useState(false);
+    const [windowStartLedger, setWindowStartLedger] = useState<number | null>(null);
 
     const { fetchTransactionHistory } = useSoroban();
 
@@ -35,9 +36,10 @@ export default function TransactionHistory({
         setLoading(true);
         setError(null);
         try {
-            const { items, nextCursor: cursor } = await fetchTransactionHistory(contractId);
+            const { items, nextCursor: cursor, window } = await fetchTransactionHistory(contractId);
             setHistory(items);
             setNextCursor(cursor);
+            setWindowStartLedger(window.startLedger ?? null);
         } catch (err) {
             console.error("Failed to load history:", err);
             setError("Failed to load transaction history. Please try again.");
@@ -50,9 +52,10 @@ export default function TransactionHistory({
         if (!nextCursor || loadingMore) return;
         setLoadingMore(true);
         try {
-            const { items, nextCursor: cursor } = await fetchTransactionHistory(contractId, { cursor: nextCursor });
+            const { items, nextCursor: cursor, window } = await fetchTransactionHistory(contractId, { cursor: nextCursor });
             setHistory((prev) => [...prev, ...items]);
             setNextCursor(cursor);
+            if (window.startLedger !== null) setWindowStartLedger(window.startLedger);
         } catch (err) {
             console.error("Failed to load more history:", err);
         } finally {
@@ -82,6 +85,17 @@ export default function TransactionHistory({
             totalRecipients: recipients.size,
         };
     }, [history, decimals]);
+
+    const truncatedWindowNotice = useMemo(() => {
+        if (windowStartLedger === null || history.length === 0) return null;
+        const earliest = history.reduce(
+            (min, tx) => (tx.ledger < min ? tx.ledger : min),
+            history[0].ledger
+        );
+        const ledgers = Math.max(0, earliest - windowStartLedger);
+        const approxMinutes = Math.round((ledgers * 5) / 60);
+        return `Showing the last ~${approxMinutes} minutes (from ledger ${windowStartLedger.toLocaleString()}). Full history requires the indexer.`;
+    }, [windowStartLedger, history]);
 
     // Prepare common export data
     const prepareExportData = () => {
@@ -243,6 +257,13 @@ export default function TransactionHistory({
                 </div>
             </div>
 
+            {truncatedWindowNotice && (
+                <div className="glass-card flex items-start gap-3 border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-300">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>{truncatedWindowNotice}</p>
+                </div>
+            )}
+
             {error && (
                 <div className="panel flex items-center gap-3 p-4 text-sm text-danger">
                     <AlertCircle className="h-4 w-4" />
@@ -253,7 +274,7 @@ export default function TransactionHistory({
             {history.length === 0 ? (
                 <div className="panel flex flex-col items-center justify-center p-12 text-center text-muted">
                     <p>No transactions found for this token yet.</p>
-                    <p className="mt-1 text-xs">Events may take a few moments to appear after a transaction.</p>
+                    <p className="mt-1 text-xs">Events may take a few moments to appear after a transaction. Without the indexer, only the most recent ~83 minutes are shown.</p>
                 </div>
             ) : (
                 <div className="panel overflow-hidden">
@@ -329,6 +350,10 @@ export default function TransactionHistory({
                         {loadingMore ? "Loading..." : "Load More"}
                     </button>
                 </div>
+            )}
+
+            {truncatedWindowNotice && (
+                <p className="text-center text-xs text-gray-500">{truncatedWindowNotice}</p>
             )}
         </div>
     );

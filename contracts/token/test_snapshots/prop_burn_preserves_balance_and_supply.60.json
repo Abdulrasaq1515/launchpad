@@ -38,7 +38,13 @@
                   "bool": false
                 },
                 "void",
-                "void"
+                "void",
+                {
+                  "u32": 0
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                }
               ]
             }
           },
@@ -62,7 +68,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "i128": "1771143669101"
+                  "i128": "4063163138904"
                 }
               ]
             }
@@ -107,7 +113,7 @@
               },
               "durability": "persistent",
               "val": {
-                "i128": "8228856330899"
+                "i128": "5936836861096"
               }
             }
           },
@@ -182,6 +188,30 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "FeeBps"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "FeeRecipient"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Initialized"
                           }
                         ]
@@ -223,7 +253,7 @@
                         ]
                       },
                       "val": {
-                        "i128": "1771143669101"
+                        "i128": "4063163138904"
                       }
                     },
                     {
@@ -235,7 +265,7 @@
                         ]
                       },
                       "val": {
-                        "i128": "8228856330899"
+                        "i128": "5936836861096"
                       }
                     }
                   ]

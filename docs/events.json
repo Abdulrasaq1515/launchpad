@@ -1,219 +1,98 @@
 {
-  "$schema_note": "Single source of truth for docs/events.md. Regenerate the doc after editing this file with: python3 scripts/generate_events_doc.py. Every topic name listed here must match a EXPECTED_TOPICS entry and a symbol_short! literal in the corresponding contract's src/lib.rs production code â€” scripts/generate_events_doc.py --check enforces that in CI. See issue #340.",
+  "$schema_note": "Single source of truth for docs/events.md. Regenerate the doc after editing this file with: python3 scripts/generate_events_doc.py. Every topic name listed here must match a EXPECTED_TOPICS entry and a symbol_short! literal in the corresponding contract's src/lib.rs production code — scripts/generate_events_doc.py --check enforces that in CI. See issue #340.",
   "token": {
     "source": "contracts/token/src/lib.rs",
     "events": [
-      {
-        "functions": ["initialize"],
-        "topics": ["init"],
-        "data": "admin: Address"
-      },
-      {
-        "functions": ["mint", "mint_batch", "initialize (when initial_supply > 0)"],
-        "topics": ["mint", "to: Address"],
-        "data": "amount: i128"
-      },
-      {
-        "functions": ["burn", "burn_admin", "burn_self"],
-        "topics": ["burn", "from: Address"],
-        "data": "amount: i128"
-      },
-      {
-        "functions": ["clawback"],
-        "topics": ["clawback", "from: Address"],
-        "data": "amount: i128",
-        "note": "clawback also emits a `transfer` event (from the internal `_transfer` helper it calls) in the same transaction, so a claw-backed balance change shows up as both events."
-      },
-      {
-        "functions": ["transfer", "transfer_from", "clawback"],
-        "topics": ["transfer", "from: Address", "to: Address"],
-        "data": "amount: i128",
-        "note": "transfer_from re-uses this event because the observable balance change is identical to a direct transfer; the allowance deduction is visible through the `allowance` getter instead."
-      },
-      {
-        "functions": ["approve"],
-        "topics": ["approve", "from: Address", "spender: Address"],
-        "data": "amount: i128"
-      },
-      {
-        "functions": ["revoke_admin"],
-        "topics": ["revoked"],
-        "data": "bool (always true)"
-      },
-      {
-        "functions": ["freeze_account"],
-        "topics": ["freeze", "addr: Address"],
-        "data": "()"
-      },
-      {
-        "functions": ["unfreeze_account"],
-        "topics": ["unfreeze", "addr: Address"],
-        "data": "()"
-      },
-      {
-        "functions": ["pause"],
-        "topics": ["pause"],
-        "data": "()"
-      },
-      {
-        "functions": ["unpause"],
-        "topics": ["unpause"],
-        "data": "()"
-      },
-      {
-        "functions": ["authorize_holder"],
-        "topics": ["authorize", "holder: Address"],
-        "data": "()"
-      },
-      {
-        "functions": ["revoke_authorization"],
-        "topics": ["rev_auth", "holder: Address"],
-        "data": "()"
-      },
-      {
-        "functions": ["upgrade"],
-        "topics": ["upgrade"],
-        "data": "new_wasm_hash: BytesN<32>"
-      },
-      {
-        "functions": ["set_max_balance_per_account"],
-        "topics": ["set_max_b"],
-        "data": "Option<u32>"
-      },
-      {
-        "functions": ["set_compliance_node"],
-        "topics": ["set_cnode"],
-        "data": "Option<Address>"
-      },
-      {
-        "functions": ["propose_admin"],
-        "topics": ["prop_adm", "current_admin: Address", "new_admin: Address"],
-        "data": "()"
-      },
-      {
-        "functions": ["cancel_admin_proposal"],
-        "topics": ["cncl_adm"],
-        "data": "()"
-      },
-      {
-        "functions": ["accept_admin"],
-        "topics": ["set_admin", "old_admin: Address", "new_admin: Address"],
-        "data": "()"
-      },
-      {
-        "functions": ["update_contract_uri"],
-        "topics": ["upd_uri"],
-        "data": "uri: String"
-      },
-      {
-        "functions": ["set_authorization_required"],
-        "topics": ["set_areq"],
-        "data": "required: bool"
-      },
-      {
-        "functions": ["renounce_authorization_revocable"],
-        "topics": ["rvk_rvc"],
-        "data": "()"
-      }
+      { "functions": ["initialize"], "topics": ["init"], "data": "admin: Address" },
+      { "functions": ["mint", "mint_batch", "initialize (when initial_supply > 0)"], "topics": ["mint", "to: Address"], "data": "amount: i128" },
+      { "functions": ["burn", "burn_admin", "burn_self"], "topics": ["burn", "from: Address"], "data": "amount: i128" },
+      { "functions": ["clawback"], "topics": ["clawback", "from: Address"], "data": "amount: i128", "note": "clawback also emits a `transfer` event (from the internal `_transfer` helper it calls) in the same transaction, so a claw-backed balance change shows up as both events." },
+      { "functions": ["transfer", "transfer_from", "clawback"], "topics": ["transfer", "from: Address", "to: Address"], "data": "amount: i128", "note": "transfer_from re-uses this event because the observable balance change is identical to a direct transfer; the allowance deduction is visible through the `allowance` getter instead." },
+      { "functions": ["transfer", "transfer_from", "clawback"], "topics": ["fee_coll", "from: Address", "to: Address"], "data": "(amount: i128, fee: i128)", "note": "Emitted only when the immutable fee from issue #497 is non-zero. fee = amount * FeeBps / 10_000, credited to FeeRecipient in the same transaction as the parent `transfer` event. The `transfer` event still reports the gross amount, so clients that reconcile balances should apply the fee from this event." },
+      { "functions": ["approve"], "topics": ["approve", "from: Address", "spender: Address"], "data": "amount: i128" },
+      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)" },
+      { "functions": ["freeze_account"], "topics": ["freeze", "addr: Address"], "data": "()" },
+      { "functions": ["unfreeze_account"], "topics": ["unfreeze", "addr: Address"], "data": "()" },
+      { "functions": ["pause"], "topics": ["pause"], "data": "()" },
+      { "functions": ["unpause"], "topics": ["unpause"], "data": "()" },
+      { "functions": ["authorize_holder"], "topics": ["authorize", "holder: Address"], "data": "()" },
+      { "functions": ["revoke_authorization"], "topics": ["rev_auth", "holder: Address"], "data": "()" },
+      { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" },
+      { "functions": ["set_max_balance_per_account"], "topics": ["set_max_b"], "data": "Option<u32>" },
+      { "functions": ["set_compliance_node"], "topics": ["set_cnode"], "data": "Option<Address>" },
+      { "functions": ["propose_admin"], "topics": ["prop_adm", "current_admin: Address", "new_admin: Address"], "data": "()" },
+      { "functions": ["cancel_admin_proposal"], "topics": ["cncl_adm"], "data": "()" },
+      { "functions": ["accept_admin"], "topics": ["set_admin", "old_admin: Address", "new_admin: Address"], "data": "()" },
+      { "functions": ["update_contract_uri"], "topics": ["upd_uri"], "data": "uri: String" },
+      { "functions": ["set_authorization_required"], "topics": ["set_areq"], "data": "required: bool" },
+      { "functions": ["renounce_authorization_revocable"], "topics": ["rvk_rvc"], "data": "()" },
+      { "functions": ["launch_seal"], "topics": ["seal"], "data": "(commitment: BytesN<32>, ledger: u32, supply: i128)", "note": "Emitted once, at the ledger the seal was recorded on. Issue #493." },
+      { "functions": ["stream_grant"], "topics": ["stream", "recipient: Address"], "data": "(total: i128, start_ledger: u32, end_ledger: u32, max_per_claim: i128)", "note": "Issue #168. Every future transfer or claim from a stream is anchored to this event." },
+      { "functions": ["claim_stream"], "topics": ["claim", "recipient: Address"], "data": "(payout: i128, from_ledger: u32, to_ledger: u32)", "note": "Issue #168. Also mints `payout` to the recipient, so a `mint` event accompanies it in the same transaction." }
     ]
   },
   "vesting": {
     "source": "contracts/vesting/src/lib.rs",
     "events": [
-      {
-        "functions": ["initialize"],
-        "topics": ["init"],
-        "data": "(admin: Address, token_contract: Address)"
-      },
-      {
-        "functions": ["propose_admin"],
-        "topics": ["prop_adm"],
-        "data": "new_admin: Address"
-      },
-      {
-        "functions": ["accept_admin"],
-        "topics": ["acc_adm"],
-        "data": "new_admin: Address"
-      },
-      {
-        "functions": ["create_schedule", "create_schedules_batch (once per schedule)"],
-        "topics": ["create", "recipient: Address"],
-        "data": "total_amount: i128"
-      },
-      {
-        "functions": ["create_schedules_batch"],
-        "topics": ["batch"],
-        "data": "(created_count: u32, total_amount: i128)",
-        "note": "Emitted once per call in addition to a `create` event per schedule in the batch."
-      },
-      {
-        "functions": ["release"],
-        "topics": ["release", "recipient: Address"],
-        "data": "releasable: i128"
-      },
-      {
-        "functions": ["revoke"],
-        "topics": ["revoke", "recipient: Address"],
-        "data": "(releasable: i128, unvested: i128)"
-      },
-      {
-        "functions": ["extend_cliff"],
-        "topics": ["clf_ext", "recipient: Address"],
-        "data": "(old_cliff: u32, new_cliff: u32)"
-      },
-      {
-        "functions": ["pause"],
-        "topics": ["pause"],
-        "data": "()"
-      },
-      {
-        "functions": ["unpause"],
-        "topics": ["unpause"],
-        "data": "()"
-      },
-      {
-        "functions": ["prune_recipient"],
-        "topics": ["prune"],
-        "data": "recipient: Address",
-        "note": "Removes a fully-settled recipient from the enumeration index only; it does not touch the recipient's own schedules."
-      },
-      {
-        "functions": ["upgrade"],
-        "topics": ["upgrade"],
-        "data": "new_wasm_hash: BytesN<32>"
-      },
-      {
-        "functions": ["revoke_admin"],
-        "topics": ["revoked"],
-        "data": "bool (always true)"
-      }
+      { "functions": ["initialize"], "topics": ["init"], "data": "(admin: Address, token_contract: Address)" },
+      { "functions": ["propose_admin"], "topics": ["prop_adm"], "data": "new_admin: Address" },
+      { "functions": ["accept_admin"], "topics": ["acc_adm"], "data": "new_admin: Address" },
+      { "functions": ["create_schedule", "create_schedules_batch (once per schedule)"], "topics": ["create", "recipient: Address"], "data": "total_amount: i128" },
+      { "functions": ["create_schedules_batch"], "topics": ["batch"], "data": "(created_count: u32, total_amount: i128)", "note": "Emitted once per call in addition to a `create` event per schedule in the batch." },
+      { "functions": ["release"], "topics": ["release", "recipient: Address"], "data": "releasable: i128" },
+      { "functions": ["revoke"], "topics": ["revoke", "recipient: Address"], "data": "(releasable: i128, unvested: i128)" },
+      { "functions": ["extend_cliff"], "topics": ["clf_ext", "recipient: Address"], "data": "(old_cliff: u32, new_cliff: u32)" },
+      { "functions": ["pause"], "topics": ["pause"], "data": "()" },
+      { "functions": ["unpause"], "topics": ["unpause"], "data": "()" },
+      { "functions": ["prune_recipient"], "topics": ["prune"], "data": "recipient: Address", "note": "Removes a fully-settled recipient from the enumeration index only; it does not touch the recipient's own schedules." },
+      { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" },
+      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)" }
     ]
   },
   "airdrop": {
     "source": "contracts/airdrop/src/lib.rs",
     "title": "Airdrop Contract",
     "events": [
-      {
-        "functions": ["initialize"],
-        "topics": ["init", "admin: Address"],
-        "data": "(token: Address, merkle_root: BytesN<32>, deadline_ledger: u32)"
-      },
-      {
-        "functions": ["fund"],
-        "topics": ["fund", "from: Address"],
-        "data": "amount: i128"
-      },
-      {
-        "functions": ["claim"],
-        "topics": ["claim", "recipient: Address"],
-        "data": "amount: i128",
-        "note": "claim also emits the token contract's own `transfer` event in the same transaction, so a claimed allocation shows up as both events."
-      },
-      {
-        "functions": ["reclaim_unclaimed"],
-        "topics": ["reclaim", "admin: Address"],
-        "data": "amount: i128"
-      }
+      { "functions": ["initialize"], "topics": ["init", "admin: Address"], "data": "(token: Address, merkle_root: BytesN<32>, deadline_ledger: u32)" },
+      { "functions": ["propose_admin"], "topics": ["prop_adm", "current_admin: Address", "new_admin: Address"], "data": "()" },
+      { "functions": ["cancel_admin_proposal"], "topics": ["cncl_adm"], "data": "()" },
+      { "functions": ["accept_admin"], "topics": ["set_admin", "old_admin: Address", "new_admin: Address"], "data": "()" },
+      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)", "note": "Irreversible. On the airdrop call `reclaim_unclaimed` first — `reclaim_unclaimed` needs an admin to sweep to, so revoking before it strands whatever is still unclaimed." },
+      { "functions": ["pause"], "topics": ["pause"], "data": "()" },
+      { "functions": ["unpause"], "topics": ["unpause"], "data": "()" },
+      { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" },
+      { "functions": ["fund"], "topics": ["fund", "from: Address"], "data": "amount: i128" },
+      { "functions": ["claim"], "topics": ["claim", "recipient: Address"], "data": "amount: i128", "note": "claim also emits the token contract's own `transfer` event in the same transaction, so a claimed allocation shows up as both events." },
+      { "functions": ["reclaim_unclaimed"], "topics": ["reclaim", "admin: Address"], "data": "amount: i128" },
+      { "functions": ["extend_deadline"], "topics": ["extend", "admin: Address"], "data": "(old_deadline: u32, new_deadline: u32)" }
+    ]
+  },
+  "factory": {
+    "source": "contracts/factory/src/lib.rs",
+    "title": "Factory Contract",
+    "events": [
+      { "functions": ["initialize"], "topics": ["init"], "data": "admin: Address" },
+      { "functions": ["propose_token_wasm_hash"], "topics": ["wasm_chg", "current: BytesN<32>", "proposed: BytesN<32>"], "data": "effective_ledger: u32", "note": "The change notification for the hash `deploy_token` uses: `current` is still in force (all-zeros when the factory has never had one), `proposed` is the replacement, and it becomes acceptable at ledger `effective_ledger` — `TOKEN_WASM_CHANGE_DELAY_LEDGERS` (six hours) after the proposal. A watcher seeing this knows a rotation is in flight and has the whole delay to object, up to `cancel_token_wasm_proposal`." },
+      { "functions": ["cancel_token_wasm_proposal"], "topics": ["cncl_wasm"], "data": "()" },
+      { "functions": ["accept_token_wasm_hash"], "topics": ["set_wasm"], "data": "wasm_hash: BytesN<32>", "note": "Emitted only once the delay has elapsed and the hash actually changed; from this point every `deploy_token` deploys `wasm_hash`." },
+      { "functions": ["set_metadata_registry"], "topics": ["set_reg"], "data": "registry: Address", "note": "The registry `deploy_token` writes indexed launch records to. Replacing it does not migrate existing records." },
+      { "functions": ["deploy_token"], "topics": ["deploy", "deployer: Address", "salt: BytesN<32>"], "data": "token_address: Address" },
+      { "functions": ["propose_admin"], "topics": ["prop_adm", "current_admin: Address", "new_admin: Address"], "data": "()" },
+      { "functions": ["cancel_admin_proposal"], "topics": ["cncl_adm"], "data": "()" },
+      { "functions": ["accept_admin"], "topics": ["set_admin", "old_admin: Address", "new_admin: Address"], "data": "()" },
+      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)", "note": "Irreversible. `deploy_token` keeps working against the already-recorded WASM hash — revoking freezes the factory's configuration, not the deployment service." },
+      { "functions": ["pause"], "topics": ["pause"], "data": "()" },
+      { "functions": ["unpause"], "topics": ["unpause"], "data": "()" },
+      { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" }
+    ]
+  },
+  "metadata-registry": {
+    "source": "contracts/metadata-registry/src/lib.rs",
+    "title": "Metadata Registry Contract",
+    "events": [
+      { "functions": ["initialize"], "topics": ["init"], "data": "(admin: Address, factory: Address)" },
+      { "functions": ["register"], "topics": ["register", "token: Address"], "data": "(symbol: String, name_digest: BytesN<32>, creator: Address, launch_ledger: u32, initial_supply: i128, metadata_digest: Option<BytesN<32>>)", "note": "Written by the factory in the same transaction as `deploy_token`. The JSON document is not stored; `metadata_digest` is keccak256 of the JSON the creator supplied." },
+      { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" }
     ]
   }
 }

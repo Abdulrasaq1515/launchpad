@@ -7,14 +7,18 @@ schema. This script:
   1. Verifies the topic-0 names listed in docs/events.json exactly match
      the `symbol_short!("...")` literals actually used in each contract's
      production source (everything before its `#[cfg(test)]` test module) —
-     the same check contracts/{token,vesting}/src/lib.rs each run for
+     the same check contracts/{token,vesting,airdrop,factory}/src/lib.rs each run for
      themselves in `test_emitted_topics_match_checked_in_fixture`.
   2. Regenerates docs/events.md from docs/events.json.
+  3. With --check-coverage, fails when a contract under contracts/ has no
+     entry in docs/events.json (the same class of guard as the error-map
+     generator from #185).
 
 Run with no arguments to (re)write docs/events.md. Run with --check to
 verify docs/events.md and the source-vs-fixture topic sets are already
 consistent without writing anything (exit 1 on any mismatch) — this is
-what CI runs.
+what CI runs. Run with --check-coverage to only verify that every contract
+directory is represented in the fixture.
 
 See issue #340: docs/events.md drifted from the contracts (documented 7
 events, contract emitted 15, including a `set_admin` event that never
@@ -29,9 +33,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_PATH = REPO_ROOT / "docs" / "events.json"
 DOC_PATH = REPO_ROOT / "docs" / "events.md"
+CONTRACTS_DIR = REPO_ROOT / "contracts"
 
 TEST_MODULE_MARKER = "#[cfg(test)]\nmod test {"
 SYMBOL_SHORT_RE = re.compile(r'symbol_short!\("([^"]*)"\)')
+
+# `symbol_short!` literals that appear in production source but are not
+# emitted as events. `claim_str` is the function selector that
+# `_require_claim_authorized` compares against an `AuthorizedInvocation`,
+# not a topic any `publish` call produces.
+NON_EVENT_LITERALS = {"claim_str"}
 
 
 def production_source(contract_source_path: Path) -> str:
@@ -43,7 +54,7 @@ def production_source(contract_source_path: Path) -> str:
 
 
 def emitted_topics(contract_source_path: Path) -> set[str]:
-    return set(SYMBOL_SHORT_RE.findall(production_source(contract_source_path)))
+    return set(SYMBOL_SHORT_RE.findall(production_source(contract_source_path))) - NON_EVENT_LITERALS
 
 
 def fixture_topics(contract_fixture: dict) -> set[str]:
@@ -66,6 +77,28 @@ def check_source_matches_fixture(name: str, contract_fixture: dict) -> list[str]
             f"{name}: {contract_fixture['source']} emits topic {undocumented!r} "
             f"but docs/events.json does not document it"
         )
+    return problems
+
+
+def contract_dirs() -> list[str]:
+    """Every contract directory under contracts/ that contains a Cargo.toml."""
+    if not CONTRACTS_DIR.is_dir():
+        return []
+    return sorted(
+        p.name for p in CONTRACTS_DIR.iterdir()
+        if p.is_dir() and (p / "Cargo.toml").is_file()
+    )
+
+
+def check_coverage(fixture: dict) -> list[str]:
+    """Every contract under contracts/ must have a fixture entry."""
+    documented = set(contract_names(fixture))
+    problems = []
+    for name in contract_dirs():
+        if name not in documented:
+            problems.append(
+                f"{name}: contracts/{name}/ has no entry in docs/events.json"
+            )
     return problems
 
 
@@ -130,6 +163,8 @@ This file is generated from `docs/events.json` by
 than editing this table by hand. `scripts/generate_events_doc.py --check` and
 each contract's `test_emitted_topics_match_checked_in_fixture` unit test both
 fail CI if this ever drifts from the contract source again (see issue #340).
+`scripts/generate_events_doc.py --check-coverage` additionally fails when a
+contract under `contracts/` has no entry here.
 
 ---
 
@@ -147,11 +182,14 @@ fail CI if this ever drifts from the contract source again (see issue #340).
 
 
 def main() -> int:
-    check_only = "--check" in sys.argv[1:]
+    args = sys.argv[1:]
+    check_only = "--check" in args
+    check_coverage_only = "--check-coverage" in args
 
     fixture = json.loads(FIXTURE_PATH.read_text())
 
     problems = []
+    problems += check_coverage(fixture)
     for name in contract_names(fixture):
         problems += check_source_matches_fixture(name, fixture[name])
 
@@ -160,6 +198,10 @@ def main() -> int:
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
         return 1
+
+    if check_coverage_only:
+        print("Every contract under contracts/ has an entry in docs/events.json.")
+        return 0
 
     generated = generate_doc(fixture)
 
