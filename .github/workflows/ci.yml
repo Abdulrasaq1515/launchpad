@@ -49,7 +49,10 @@ jobs:
 
       - name: Assert FeeBps is written exactly once (issue #497)
         run: |
-          count=$(grep -c "set(&DataKey::FeeBps" contracts/token/src/lib.rs)
+          # Scan production code only: the `#[cfg(test)]` module contains a
+          # test that scans the same source for this string, so a whole-file
+          # grep would count that test's own literal alongside the real write.
+          count=$(sed '/^#\[cfg(test)\]/q' contracts/token/src/lib.rs | grep -c "set(&DataKey::FeeBps")
           if [ "$count" -ne 1 ]; then
             echo "::error::Expected exactly 1 write to DataKey::FeeBps, found $count"
             echo "  DataKey::FeeBps must be written only in initialize() and"
