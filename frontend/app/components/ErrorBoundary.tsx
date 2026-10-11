@@ -56,14 +56,14 @@ function DefaultErrorFallback({
 }) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="rounded-full bg-red-500/10 p-3 text-red-400">
+      <div className="rounded-full bg-danger-soft p-3 text-danger">
         <AlertTriangle className="h-8 w-8" />
       </div>
       <div className="space-y-2">
-        <h2 className="text-2xl font-semibold text-white">
+        <h2 className="text-2xl font-semibold text-ink">
           Something went wrong
         </h2>
-        <p className="max-w-md text-sm text-gray-400">
+        <p className="max-w-md text-sm text-muted">
           {error.message ||
             "An unexpected error occurred. The page failed to render."}
         </p>
@@ -71,7 +71,7 @@ function DefaultErrorFallback({
       <button
         type="button"
         onClick={onReset}
-        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-colors hover:border-stellar-400/30 hover:bg-stellar-500/10 hover:text-stellar-300"
+        className="inline-flex items-center gap-2 rounded-lg border border-line bg-sunken px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-info/30 hover:bg-info-soft hover:text-info"
       >
         <RotateCcw className="h-4 w-4" />
         Try again

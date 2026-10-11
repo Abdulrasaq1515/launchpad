@@ -223,7 +223,7 @@ export function useTransactionSimulator() {
       ownerAddress: string,
       spenderAddress: string,
       amount: bigint | string,
-      expirationLedger?: number,
+      expirationLedger: number,
     ): Promise<PreflightCheckResult> {
       return runSimulation(() =>
         simulateApprove(

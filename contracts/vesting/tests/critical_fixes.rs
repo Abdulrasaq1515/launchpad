@@ -1,6 +1,7 @@
 //! Tests for critical vesting fixes (#458, #459, #460, #461)
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)]
 mod tests {
     #[test]
     fn test_prune_recipient_requires_settlement() {

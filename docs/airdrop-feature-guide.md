@@ -171,15 +171,15 @@ the airdrop silently becoming unclaimable.
 ## Deploying the contract
 
 The airdrop contract is deployed the same way as the vesting contract — the
-launchpad's `scripts/deploy.ts` only handles the token.
+launchpad's `scripts/deploy-token.mjs` only handles the token.
 
 ```bash
 # Build
-cargo build -p soroban-airdrop --target wasm32-unknown-unknown --release
+stellar contract build
 
 # Deploy (one airdrop contract per distribution)
 stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/soroban_airdrop.wasm \
+  --wasm target/wasm32v1-none/release/soroban_airdrop.wasm \
   --network testnet \
   --source admin
 ```

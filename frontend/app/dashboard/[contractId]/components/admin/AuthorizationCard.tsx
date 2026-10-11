@@ -35,7 +35,7 @@ export function AuthorizationCard({
       wide
       description="This token requires holders to be authorized before they can receive it."
     >
-      <div className="mb-4 rounded-xl border border-stellar-500/20 bg-stellar-500/5 p-3 text-xs leading-relaxed text-stellar-200/80">
+      <div className="mb-4 rounded-xl border border-info/20 bg-info-soft p-3 text-xs leading-relaxed text-info/80">
         Until an address is authorized, every transfer and mint to it is
         rejected on-chain. Authorize each holder before sending them tokens.
         {revocable
@@ -60,7 +60,7 @@ export function AuthorizationCard({
             label: "Authorize",
             successLabel: "Authorized",
             className:
-              "bg-stellar-500 hover:bg-stellar-600 text-white shadow-lg shadow-stellar-500/20",
+              "bg-info hover:bg-info text-ink",
           },
           {
             action: "revoke-auth",
@@ -68,7 +68,7 @@ export function AuthorizationCard({
             successLabel: "Revoked",
             variant: "secondary",
             className:
-              "border-red-500/20 text-red-400 hover:border-red-500/40",
+              "border-danger/20 text-danger hover:border-danger/40",
             // The contract asserts on `authorization_revocable`, so a
             // non-revocable token would fail at simulation. Say so up front.
             disabledReason: revocable

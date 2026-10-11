@@ -6,8 +6,6 @@ import { useWallet } from "./useWallet";
 import { useNetwork } from "../providers/NetworkProvider";
 import { toBaseUnits } from "@/lib/utils";
 import { verifyFactory } from "@/lib/stellar";
-import { Client as TokenClient } from "@/lib/bindings/token/src/index";
-import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 
 /**
  * Cryptographically secure random bytes for the deploy salt.
@@ -32,31 +30,7 @@ function randomBytes(length: number): Buffer {
 }
 
 // ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
 
-/**
- * When `"true"`, deploy tokens the legacy way: a plain `createContract` deploy
- * followed by a **separate** `initialize` transaction. This is the pre-#368
- * behaviour and exists as a fallback while the factory contract is rolled out.
- *
- * Defaults to `false` — new deployments go through the factory, which deploys
- * and initialises the token in a single atomic transaction (no front-running
- * window between deploy and initialize).
- *
- * Read at call time rather than module scope: Next.js inlines
- * `NEXT_PUBLIC_*` at build time, so this is equivalent for the shipped app,
- * but makes the hook straight-forward to test by swapping `process.env`.
- */
-function getDeployConfig() {
-  return {
-    useLegacyDeploy: process.env.NEXT_PUBLIC_USE_LEGACY_DEPLOY === "true",
-    factoryAddress: process.env.NEXT_PUBLIC_FACTORY_ADDRESS ?? "",
-    tokenWasmHash: process.env.NEXT_PUBLIC_TOKEN_WASM_HASH ?? "",
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -126,11 +100,13 @@ export interface DeployTokenError {
 /**
  * Custom hook for deploying a Soroban SEP-41 token contract.
  *
- * By default the token is deployed through the atomic factory: a single
- * `deploy_token` invocation that both creates the contract and calls
- * `initialize` on it (either happens or neither does). Set
- * `NEXT_PUBLIC_USE_LEGACY_DEPLOY=true` to fall back to the two-transaction
- * legacy path (deploy, then initialize).
+ * The token is deployed through the atomic factory: a single `deploy_token`
+ * invocation that both creates the contract and calls `initialize` on it, so
+ * either both happen or neither does. There is no half-initialised token to
+ * clean up if the second half fails, because there is no second half.
+ *
+ * The factory address comes from the active network's config, so testnet and
+ * mainnet factories coexist without an env-var swap.
  */
 export function useDeployToken() {
   const { connected, publicKey, signTransaction } = useWallet();
@@ -138,9 +114,19 @@ export function useDeployToken() {
 
   const deployToken = useCallback(
     async (params: DeployTokenParams): Promise<DeployTokenResult> => {
-      if (!connected || !publicKey) {
+      if (!connected || !publicKey || !signTransaction) {
         throw {
-          message: "Wallet not connected. Please connect your wallet and try again.",
+          message: "Connect a wallet before deploying a token.",
+          type: "wallet",
+        } as DeployTokenError;
+      }
+
+      const factoryAddress = networkConfig.factoryAddress;
+      if (!factoryAddress) {
+        throw {
+          message:
+            `No token factory is configured for ${networkConfig.network}. Set ` +
+            `NEXT_PUBLIC_FACTORY_ADDRESS_${networkConfig.network.toUpperCase()} in your environment.`,
           type: "validation",
         } as DeployTokenError;
       }
@@ -151,27 +137,6 @@ export function useDeployToken() {
         rpcUrl: networkConfig.rpcUrl,
         passphrase: networkConfig.passphrase,
       };
-
-      const { useLegacyDeploy, factoryAddress, tokenWasmHash } = getDeployConfig();
-
-      if (useLegacyDeploy) {
-        if (!tokenWasmHash) {
-          throw {
-            message:
-              "Token WASM hash not configured. Please set NEXT_PUBLIC_TOKEN_WASM_HASH in your environment.",
-            type: "validation",
-          } as DeployTokenError;
-        }
-        return deployLegacy(params, ctx, tokenWasmHash);
-      }
-
-      if (!factoryAddress) {
-        throw {
-          message:
-            "Factory contract not configured. Please set NEXT_PUBLIC_FACTORY_ADDRESS in your environment.",
-          type: "validation",
-        } as DeployTokenError;
-      }
 
       const check = await verifyFactory(factoryAddress, networkConfig);
       if (!check.ok) {
@@ -184,9 +149,15 @@ export function useDeployToken() {
           type: "validation",
         } as DeployTokenError;
       }
+
       return deployViaFactory(params, ctx, factoryAddress);
     },
-    [connected, publicKey, signTransaction, networkConfig.rpcUrl, networkConfig.passphrase]
+    [
+      connected,
+      publicKey,
+      signTransaction,
+      networkConfig,
+    ],
   );
 
   return { deployToken };
@@ -382,7 +353,7 @@ async function signPrepared(prepared: StellarSdk.Transaction, ctx: DeployContext
  * are Addresses, numeric fields get explicit widths, and optional fields pass
  * `null` for `None`.
  */
-function buildTokenConfigScVals(
+export function buildTokenConfigScVals(
   params: DeployTokenParams,
   deployer: string,
 ): StellarSdk.xdr.ScVal {
@@ -411,8 +382,17 @@ function buildTokenConfigScVals(
       symbol: params.symbol,
     },
     {
+      // Every key must be declared, and every key must be a `symbol`.
+      // nativeToScVal defaults an undeclared key to ScVal::String, and the
+      // contract's #[contracttype] struct is an ScMap keyed by Symbol. Mixing
+      // the two also breaks the host's key-ordering check, because ScVal sorts
+      // by type tag before value — which is the
+      //   "ScMap was not sorted by key for conversion to host object"
+      // the deploy simulation used to fail with.
       type: {
         admin: ["symbol", "address"],
+        authorization_required: ["symbol", "bool"],
+        authorization_revocable: ["symbol", "bool"],
         compliance_node: ["symbol", "address"],
         contract_uri: ["symbol", "string"],
         decimal: ["symbol", "u32"],
@@ -420,31 +400,12 @@ function buildTokenConfigScVals(
         fee_recipient: ["symbol", "address"],
         initial_supply: ["symbol", "i128"],
         max_supply: ["symbol", "i128"],
+        name: ["symbol", "string"],
+        symbol: ["symbol", "string"],
         metadata: ["symbol", "string"],
       },
     },
   );
-}
-
-/**
- * Extract the contract address returned by a `createHostFunction` /
- * `createCustomContract` operation from a successful transaction's soroban
- * return value.
- */
-function extractContractId(
-  result: StellarSdk.rpc.Api.GetTransactionResponse,
-): string | null {
-  if (result.status !== "SUCCESS" || !result.resultMetaXdr) {
-    return null;
-  }
-  try {
-    const returnValue = result.resultMetaXdr.v3()?.sorobanMeta()?.returnValue();
-    if (!returnValue) return null;
-    return StellarSdk.Address.fromScVal(returnValue).toString();
-  } catch (err) {
-    console.error("Failed to extract contract ID:", err);
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -516,124 +477,3 @@ async function deployViaFactory(
   return { contractId, transactionHash };
 }
 
-// ---------------------------------------------------------------------------
-// Legacy path (two-transaction: deploy, then initialize)
-// ---------------------------------------------------------------------------
-
-/**
- * Deploy a token the original way: `createContract` (using a pre-uploaded WASM
- * hash) followed by a separate `initialize` transaction. Kept behind
- * `NEXT_PUBLIC_USE_LEGACY_DEPLOY=true` as a fallback while the factory is
- * rolled out.
- */
-async function deployLegacy(
-  params: DeployTokenParams,
-  ctx: DeployContext,
-  tokenWasmHash: string,
-): Promise<DeployTokenResult> {
-  const rpc = new StellarSdk.rpc.Server(ctx.rpcUrl);
-
-  // ── Step 1: Deploy the raw contract ─────────────────────────────────
-  const salt = randomBytes(32);
-  const sourceAccount = await loadSourceAccount(rpc, ctx.publicKey);
-  const wasmHashBuffer = Buffer.from(tokenWasmHash, "hex");
-
-  const deployOp = StellarSdk.Operation.createCustomContract({
-    address: new StellarSdk.Address(ctx.publicKey),
-    wasmHash: wasmHashBuffer,
-    salt,
-  });
-
-  const deployTx = new StellarSdk.TransactionBuilder(sourceAccount, {
-    fee: StellarSdk.BASE_FEE,
-    networkPassphrase: ctx.passphrase,
-  })
-    .addOperation(deployOp)
-    .setTimeout(30)
-    .build();
-
-  let simResult: StellarSdk.rpc.Api.SimulateTransactionResponse;
-  try {
-    simResult = await rpc.simulateTransaction(deployTx);
-  } catch (err) {
-    throw {
-      message: `Simulation request failed: ${err instanceof Error ? err.message : String(err)}`,
-      type: "simulation",
-    } as DeployTokenError;
-  }
-
-  if (StellarSdk.rpc.Api.isSimulationError(simResult)) {
-    throw {
-      message: `Simulation failed: ${simResult.error}`,
-      type: "simulation",
-    } as DeployTokenError;
-  }
-  if (!StellarSdk.rpc.Api.isSimulationSuccess(simResult)) {
-    throw {
-      message: "Simulation did not succeed. Please check your parameters and try again.",
-      type: "simulation",
-    } as DeployTokenError;
-  }
-
-  const assembledDeployTx = StellarSdk.rpc.assembleTransaction(deployTx, simResult).build();
-  const signedDeployXdr = await signPrepared(assembledDeployTx, ctx);
-  const deployHash = await sendAndPoll(signedDeployXdr, ctx);
-
-  // Resolve the deterministic contract address from the deploy result meta.
-  const deployment = await rpc.getTransaction(deployHash);
-  const contractId = extractContractId(deployment);
-  if (!contractId) {
-    throw {
-      message: "Contract deployed but its address could not be extracted from the result.",
-      type: "broadcast",
-    } as DeployTokenError;
-  }
-
-  // ── Step 2: Initialize the token ────────────────────────────────────
-  const tokenClient = new TokenClient({
-    networkPassphrase: ctx.passphrase,
-    contractId,
-    rpcUrl: ctx.rpcUrl,
-    publicKey: ctx.publicKey,
-  });
-
-  let initTx: AssembledTransaction<null>;
-  try {
-    initTx = await tokenClient.initialize({
-      admin: params.adminAddress || ctx.publicKey,
-      decimal: params.decimals,
-      name: params.name,
-      symbol: params.symbol,
-      initial_supply: toBaseUnitsOrThrow(params.initialSupply, params.decimals, "initialSupply"),
-      max_supply: params.maxSupply
-        ? toBaseUnitsOrThrow(params.maxSupply, params.decimals, "maxSupply")
-        : undefined,
-      authorization_required: params.authorizationRequired ?? false,
-      authorization_revocable: params.authorizationRevocable ?? false,
-      compliance_node:
-        params.complianceNodeAddress && params.complianceNodeAddress.trim().length > 0
-          ? params.complianceNodeAddress.trim()
-          : undefined,
-      contract_uri: params.contractUri ?? undefined,
-      fee_bps: params.feeBps ?? 0,
-      fee_recipient: params.feeRecipient || params.adminAddress || ctx.publicKey,
-    });
-  } catch (err) {
-    throw {
-      message: `Initialization simulation failed: ${err instanceof Error ? err.message : String(err)}`,
-      type: "simulation",
-    } as DeployTokenError;
-  }
-
-  if (!initTx.built) {
-    throw {
-      message: "Initialization simulation did not produce a transaction.",
-      type: "simulation",
-    } as DeployTokenError;
-  }
-
-  const signedInitXdr = await signPrepared(initTx.built, ctx);
-  const initHash = await sendAndPoll(signedInitXdr, ctx, contractId);
-
-  return { contractId, transactionHash: initHash };
-}

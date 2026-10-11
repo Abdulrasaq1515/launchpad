@@ -20,6 +20,10 @@ jobs:
       - name: Check event docs are in sync with contract source
         run: python3 scripts/generate_events_doc.py --check
 
+      # `rustup show` installs exactly what rust-toolchain.toml pins, so the
+      # compiler here is the one that produced the wasm hashes in the manifest.
+      # A different rustc yields a different hash for identical source, which
+      # would break on-chain contract verification.
       - name: Verify every contract has an events.json entry
         run: |
           missing=0
@@ -54,13 +58,10 @@ jobs:
           fi
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
-          components:
-            - rustfmt
-            - clippy
+        run: |
+          rustup show
+          rustup component add rustfmt clippy
+          rustc --version
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
@@ -85,16 +86,22 @@ jobs:
       - name: Audit dependencies
         run: cargo audit
 
-      - name: Install Soroban CLI
-        run: cargo install --locked soroban-cli
+      # soroban-cli is deprecated and renamed; the release tarball installs in
+      # seconds where `cargo install` takes minutes.
+      - name: Install Stellar CLI
+        run: |
+          VERSION=28.0.0
+          curl -sSfL "https://github.com/stellar/stellar-cli/releases/download/v${VERSION}/stellar-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz -C /usr/local/bin stellar
+          stellar --version
 
       - name: Build optimized WASM
-        run: soroban contract build
+        run: stellar contract build
 
       - name: Compute WASM hashes & validate manifest
         run: |
           MANIFEST="contracts/wasm-manifest.json"
-          WASM_DIR="target/wasm32-unknown-unknown/release"
+          WASM_DIR="target/wasm32v1-none/release"
           PASS=true
 
           compute_hash() {
@@ -142,7 +149,7 @@ jobs:
 
           if [ "$PASS" = "false" ]; then
             echo "WASM hashes do not match manifest. Did the contract code change?"
-            echo "Run: sha256sum target/wasm32-unknown-unknown/release/*.wasm"
+            echo "Run: sha256sum target/wasm32v1-none/release/*.wasm"
             echo "Then update contracts/wasm-manifest.json with the new hashes."
             exit 1
           fi
@@ -155,8 +162,8 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const crypto = require('crypto');
-            const wasmDir = 'target/wasm32-unknown-unknown/release';
-
+            const wasmDir = 'target/wasm32v1-none/release';
+            
             if (!fs.existsSync(wasmDir)) {
               console.log('WASM target directory not found.');
               return;
@@ -252,3 +259,8 @@ jobs:
 
       - name: Run Jest tests
         run: npm run test
+
+      # Without this, a frontend that does not compile still passes CI: lint and
+      # type-check alone missed a prerender failure that broke `next build`.
+      - name: Build
+        run: npm run build

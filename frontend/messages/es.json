@@ -49,42 +49,100 @@
     "skipToContent": "Saltar al contenido principal",
     "language": "Idioma",
     "network": "Red",
-    "airdrop": "Airdrop"
+    "airdrop": "Airdrop",
+    "vesting": "Vesting",
+    "home": "Resumen",
+    "sections": {
+      "issue": "Emitir",
+      "distribute": "Distribuir",
+      "account": "Cuenta"
+    },
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú",
+    "theme": "Apariencia",
+    "themeLight": "Claro",
+    "themeDark": "Oscuro",
+    "themeSystem": "Sistema"
   },
   "home": {
-    "badge": "Construido en Stellar Soroban",
-    "title": "Lanza Tu Token",
-    "titleHighlight": "En Minutos",
-    "description": "SoroPad es un launchpad de código abierto para desplegar tokens compatibles con SEP-41 en Soroban — con calendarios de vencimiento, controles de administrador y un panel en tiempo real. No se requiere código de smart contract.",
-    "deployButton": "Desplegar un Token",
-    "githubButton": "Ver en GitHub",
-    "lookupPlaceholder": "Pega un ID de contrato para buscar cualquier token…",
-    "lookupAriaLabel": "ID del contrato del token",
-    "lookupButtonAria": "Buscar token",
-    "lookupEmptyError": "Pega un ID de contrato para buscarlo.",
-    "lookupInvalidError": "Eso no parece un ID de contrato Stellar válido (C + 55 caracteres base-32).",
-    "features": {
-      "deploy": {
-        "icon": "🪙",
-        "title": "Despliegue con Un Clic",
-        "description": "Rellena un formulario, firma con Freighter, y tu token SEP-41 estará vivo en Soroban."
-      },
+    "title": "Emite un token y ten claro qué puedes seguir cambiando.",
+    "description": "SoroPad deploys SEP-41 tokens on Stellar with vesting, allowances and admin controls you can actually see. Some of those controls are permanent once used — this tells you which ones, before you use them.",
+    "deployButton": "Lanzar un token",
+    "githubButton": "Ver el código",
+    "lookupPlaceholder": "ID del contrato (C…)",
+    "lookupAriaLabel": "Token contract ID",
+    "lookupButtonAria": "Look up token",
+    "lookupEmptyError": "Paste a contract ID to look it up.",
+    "lookupInvalidError": "That is not a valid Stellar contract ID. They start with C and are 56 characters.",
+    "lookupLabel": "Buscar un token",
+    "lookupSubmit": "Buscar",
+    "capabilities": {
+      "title": "What you can set up at launch",
+      "description": "Every one of these is enforced by the contract, not by this interface.",
       "vesting": {
-        "icon": "🔒",
-        "title": "Vencimiento y Controles",
-        "description": "Cliff + vencimiento lineal por wallet. Mint, burn y congelación con controles de administrador."
+        "title": "Vesting schedules",
+        "description": "Cliff and linear release per recipient. The contract holds the tokens and reports whether it is funded for everything it has promised."
       },
-      "dashboard": {
-        "icon": "📊",
-        "title": "Panel en Vivo",
-        "description": "Métricas de suministro, tabla de holders, progreso de vencimiento — todo en tiempo real."
+      "airdrop": {
+        "title": "Merkle airdrops",
+        "description": "Publish a root, let recipients claim against it. No list to host and no per-recipient transaction to pay for."
+      },
+      "allowances": {
+        "title": "Allowances",
+        "description": "Let another account spend a set amount on your behalf, with an expiry. Revoke at any time."
+      },
+      "supply": {
+        "title": "Supply limits",
+        "description": "Set a hard cap at launch, and a per-account ceiling that stops any one holder taking more than a share of supply."
+      },
+      "compliance": {
+        "title": "Compliance checks",
+        "description": "Point the token at a contract that approves or rejects each transfer, for tokens that need a rule applied before they move."
+      },
+      "controls": {
+        "title": "Holder controls",
+        "description": "Freeze an account, claw tokens back, or require holders to be authorised before they can receive."
+      }
+    },
+    "permanent": {
+      "title": "The decisions you cannot take back",
+      "description": "Four actions are one-way. The interface makes you hold the button down for these, and says so first.",
+      "revokeAdmin": {
+        "title": "Revoking admin",
+        "description": "Locks the contract for good. No further minting, freezing, pausing or upgrades — by anyone, ever."
+      },
+      "renounce": {
+        "title": "Renouncing revocable authorisation",
+        "description": "Gives up your ability to withdraw a holder's authorisation. It cannot be re-enabled."
+      },
+      "upgrade": {
+        "title": "Upgrading the code",
+        "description": "Replaces the logic every holder is relying on. The old code is not kept."
+      },
+      "cap": {
+        "title": "Setting the supply cap",
+        "description": "The maximum supply is fixed at launch and cannot be raised afterwards."
+      }
+    },
+    "trust": {
+      "title": "Check it yourself",
+      "source": {
+        "title": "Open source",
+        "description": "Every contract and the whole interface. Read it before you trust it."
+      },
+      "hashes": {
+        "title": "Published build hashes",
+        "description": "The hash of each deployed contract is committed to the repo and re-checked on every push."
+      },
+      "testnet": {
+        "title": "Testnet first",
+        "description": "Launch the same token on testnet with the same tools, and change nothing but the network."
       }
     }
   },
   "deploy": {
-    "title": "Despliega Tu",
-    "titleHighlight": "Token Soroban",
-    "description": "Lanza un token compatible con SEP-41 en minutos. Configura tu metadatos, suministro y gobernanza, luego despliega a la red Stellar.",
+    "title": "Lanzar un token",
+    "description": "Cuatro pasos: qué es el token, cuánto existe, quién lo administra y una revisión antes de firmar.",
     "steps": {
       "metadata": "Metadatos",
       "supply": "Suministro",
@@ -150,8 +208,8 @@
     }
   },
   "dashboard": {
-    "title": "Panel del Token",
-    "description": "Ingresa el ID de contrato de un token desplegado para ver métricas de suministro, distribución de holders y más.",
+    "title": "Tokens",
+    "description": "Abre un token que hayas lanzado o pega cualquier ID de contrato.",
     "searchPlaceholder": "CABC123...XYZ (ID de contrato)",
     "searchLabel": "ID de Contrato",
     "viewMyAccount": "Ver Mi Cuenta",
@@ -211,7 +269,13 @@
     "notATokenNote": "Este panel solo soporta contratos de token compatibles con SEP-41.",
     "backToSearchLink": "Volver a Búsqueda",
     "totalMinted": "Total Minteado hasta la Fecha",
-    "totalRecipients": "Total de Destinatarios"
+    "totalRecipients": "Total de Destinatarios",
+    "open": "Abrir",
+    "recent": "Lanzados desde este navegador",
+    "recentEmpty": "Los tokens que lances aparecerán aquí.",
+    "connectPrompt": "Conecta una billetera para ver tus tokens.",
+    "launchToken": "Lanzar un token",
+    "retry": "Reintentar"
   },
   "token": {
     "fetchingData": "Obteniendo datos del token...",
@@ -259,7 +323,8 @@
       "backToHome": "Volver al Inicio",
       "viewOnExplorer": "Ver en Explorador",
       "footerNote": "Si crees que este es un contrato de token válido, por favor verifica el ID del contrato e inténtalo de nuevo."
-    }
+    },
+    "immutable": "Inmutable"
   },
   "claim": {
     "title": "Reclamar Vesting",
@@ -601,18 +666,21 @@
     "title": "Lanzamientos Recientes",
     "description": "Tokens desplegados recientemente en Stellar Soroban",
     "error": "No se pudieron cargar los lanzamientos recientes.",
-    "emptyTitle": "No hay lanzamientos recientes disponibles",
-    "emptyDescription": "Los lanzamientos de tokens recientes requieren que se configure un indexador. Aún puedes desplegar y gestionar tokens usando el panel.",
-    "emptyAction": "Desplegar un Token",
-    "trending": "Tendencia",
+    "emptyTitle": "Aún no hay lanzamientos",
+    "emptyDescription": "Este listado se lee desde un indexador. Sin uno configurado permanece vacío; desplegar y gestionar tokens funciona igualmente.",
+    "emptyAction": "Lanzar un token",
     "supply": "Suministro",
     "contract": "Contrato",
     "deployed": "Desplegado",
-    "viewDashboard": "Ver Panel",
     "justNow": "justo ahora",
     "minutesAgo": "hace {count}m",
     "hoursAgo": "hace {count}h",
-    "daysAgo": "hace {count}d"
+    "daysAgo": "hace {count}d",
+    "loading": "Cargando lanzamientos…",
+    "retry": "Reintentar",
+    "token": "Token",
+    "status": "Estado",
+    "active": "Activo"
   },
   "transfer": {
     "connectTitle": "Conecta Tu Wallet",
@@ -752,5 +820,21 @@
     "description": "Ocurrió un error inesperado. Por favor intenta actualizar la página.",
     "refreshButton": "Actualizar Página",
     "errorDetails": "Detalles del error: {error}"
+  },
+  "allowancesPage": {
+    "title": "Autorizaciones",
+    "lede": "Permisos permanentes que has concedido para que otra cuenta gaste tus tokens. Puedes revocarlos cuando quieras.",
+    "tokenLabel": "Contrato del token",
+    "load": "Cargar",
+    "connectTitle": "Conecta una billetera",
+    "connectDescription": "Las autorizaciones se conceden desde tu cuenta, así que hace falta una billetera conectada.",
+    "emptyTitle": "Sin autorizaciones en este token",
+    "emptyDescription": "Cuando autorices a otra cuenta a gastar este token, aparecerá aquí.",
+    "grantTitle": "Conceder autorización",
+    "listTitle": "Autorizaciones concedidas",
+    "colSpender": "Autorizado",
+    "colAmount": "Importe",
+    "colStatus": "Estado",
+    "revokeFailed": "No se pudo revocar la autorización."
   }
 }

@@ -43,16 +43,16 @@ export function WalletModal({
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+        className="bg-panel dark:bg-gray-800 rounded-lg max-w-md w-full mx-4 p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-ink">
             Connect Wallet
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-muted hover:text-gray-700 dark:text-muted dark:hover:text-ink"
             aria-label="Close modal"
           >
             <svg
@@ -82,24 +82,32 @@ export function WalletModal({
               disabled={!available}
               className={`w-full flex items-center gap-4 p-4 rounded-lg border-2 transition-all ${
                 available
-                  ? "border-gray-200 hover:border-blue-500 hover:bg-blue-50 dark:border-gray-700 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 cursor-pointer"
-                  : "border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-900 cursor-not-allowed opacity-50"
+                  ? "border-gray-200 hover:border-info hover:bg-blue-50 dark:border-line dark:hover:border-info dark:hover:bg-blue-900/20 cursor-pointer"
+                  : "border-gray-100 bg-gray-50 dark:border-line dark:bg-gray-900 cursor-not-allowed opacity-50"
               }`}
             >
-              <span className="text-3xl">{adapter.icon}</span>
+              {/* A two-letter mark rather than an emoji: these identify third-party
+                  wallets, and a rocket or a lobster says nothing about which
+                  one you are about to hand a signing request to. */}
+              <span
+                aria-hidden
+                className="data flex h-9 w-9 flex-none items-center justify-center rounded-[7px] border border-line bg-sunken text-[0.75rem] font-medium text-body"
+              >
+                {adapter.icon}
+              </span>
               <div className="flex-1 text-left">
-                <div className="font-semibold text-gray-900 dark:text-white">
+                <div className="font-semibold text-gray-900 dark:text-ink">
                   {adapter.name}
                 </div>
                 {!available && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-muted dark:text-muted">
                     Not installed
                   </div>
                 )}
               </div>
               {available && (
                 <svg
-                  className="w-5 h-5 text-gray-400"
+                  className="w-5 h-5 text-muted"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -116,7 +124,7 @@ export function WalletModal({
           ))}
         </div>
 
-        <p className="mt-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+        <p className="mt-6 text-sm text-muted dark:text-muted text-center">
           By connecting a wallet, you agree to the Terms of Service
         </p>
       </div>

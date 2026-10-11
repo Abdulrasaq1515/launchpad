@@ -20,7 +20,7 @@ function toDecimalString(value: number): string {
   if (!Number.isFinite(value)) return "";
 
   const text = String(value);
-  const match = /^([+-]?)(\d+)(?:\.(\d+))?[eE][(+-]?\d+)$/.exec(text);
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(text);
   if (!match) return text;
 
   const [, sign, intPart, fracPart = "", expPart] = match;

@@ -7,6 +7,7 @@ import { PendingAdminBanner } from "@/components/PendingAdminBanner";
 import { VestingSolvencyBadge } from "@/components/VestingSolvencyBadge";
 import { useToast } from "@/app/providers/ToastProvider";
 import { useWallet } from "@/app/hooks/useWallet";
+import { truncateAddress } from "@/lib/stellar";
 import {
   fetchVestingAdminState,
   fetchAllVestingSchedules,
@@ -34,7 +35,7 @@ export function ClaimVesting() {
   // One VestingInfo entry per schedule index
   const [schedules, setSchedules] = useState<VestingInfo[]>([]);
   const [adminState, setAdminState] = useState<VestingAdminState | null>(null);
-  const [solvency, setSolvency] = useState
+  const [solvency, setSolvency] = useState<
     VestingSolvency | null | undefined
   >();
   const [loading, setLoading] = useState(false);
@@ -209,8 +210,8 @@ export function ClaimVesting() {
   return (
     <>
       {!connected && (
-        <div className="glass-card p-8 text-center">
-          <p className="mb-4 text-gray-400">
+        <div className="panel p-8 text-center">
+          <p className="mb-4 text-muted">
             {t("walletGate")}
           </p>
           <Button onClick={connect}>{t("connectWallet")}</Button>
@@ -219,10 +220,10 @@ export function ClaimVesting() {
 
       {connected && (
         <div className="space-y-8">
-          <div className="glass-card p-6">
+          <div className="panel p-6">
             <label
               htmlFor="contractId"
-              className="mb-2 block text-sm font-medium text-gray-300"
+              className="mb-2 block text-sm font-medium text-body"
             >
               {t("contractIdLabel")}
             </label>
@@ -236,7 +237,7 @@ export function ClaimVesting() {
                   setError(null);
                 }}
                 placeholder={t("contractIdPlaceholder")}
-                className="flex-1 rounded-xl border border-white/10 bg-void-800 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-stellar-400 focus:ring-1 focus:ring-stellar-400"
+                className="flex-1 rounded-xl border border-line bg-sunken px-4 py-3 text-sm text-ink placeholder-faint outline-none transition-colors focus:border-info focus:ring-1 focus:ring-info"
                 aria-describedby={error ? "contract-error" : undefined}
               />
               <Button
@@ -251,7 +252,7 @@ export function ClaimVesting() {
             {error && (
               <p
                 id="contract-error"
-                className="mt-3 text-sm text-red-400"
+                className="mt-3 text-sm text-danger"
                 role="alert"
               >
                 {error}
@@ -325,22 +326,22 @@ function ScheduleCard({
       : 0;
 
   return (
-    <div className="glass-card animate-fade-in-up space-y-6 p-6">
+    <div className="panel space-y-6 p-6">
       {/* Header */}        <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-ink">
             {scheduleCount > 1
               ? t("scheduleOf", { current: scheduleIndex + 1, count: scheduleCount })
               : t("yourSchedule")}
           </h2>
           {scheduleCount > 1 && (
-            <span className="rounded-full border border-stellar-400/20 bg-stellar-400/10 px-2.5 py-0.5 text-xs text-stellar-400">
+            <span className="rounded-full border border-info/20 bg-info-soft px-2.5 py-0.5 text-xs text-info">
               #{scheduleIndex + 1}
             </span>
           )}
         </div>
         {schedule.revoked && (
-          <span className="rounded-lg bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400">
+          <span className="rounded-lg bg-danger-soft px-3 py-1 text-xs font-medium text-danger">
             {t("revoked")}
           </span>
         )}
@@ -349,14 +350,14 @@ function ScheduleCard({
       {/* Progress bar */}
       <div>
         <div className="mb-2 flex justify-between text-sm">
-          <span className="text-gray-400">{t("vestingProgress")}</span>
-          <span className="font-medium text-stellar-400">
+          <span className="text-muted">{t("vestingProgress")}</span>
+          <span className="font-medium text-info">
             {progressPct.toFixed(1)}%
           </span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-void-700">
+        <div className="h-3 overflow-hidden rounded-full bg-sunken">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-stellar-400 to-stellar-600 transition-all duration-500"
+            className="h-full rounded-full bg-ink transition-all duration-500"
             style={{ width: `${Math.min(progressPct, 100)}%` }}
             role="progressbar"
             aria-valuenow={Math.round(progressPct)}
@@ -388,7 +389,7 @@ function ScheduleCard({
       </div>
 
       {/* Schedule metadata */}
-      <div className="space-y-2 rounded-xl border border-white/5 bg-void-800/50 p-4 text-sm">
+      <div className="space-y-2 rounded-xl border border-line/5 bg-sunken/50 p-4 text-sm">
         <DetailRow
           label={t("recipient")}
           value={truncateAddress(schedule.recipient)}
@@ -429,7 +430,7 @@ function ScheduleCard({
               : t("releaseTokens", { amount: formatTokenAmount(info.releasableAmount) })}
       </Button>
       {info.isPaused && !schedule.revoked && (
-        <p className="text-xs text-orange-400">
+        <p className="text-xs text-warn">
           {t("pausedMessage")}
         </p>
       )}
@@ -449,11 +450,11 @@ function StatCard({
   highlight?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-void-800/50 p-4">
-      <p className="text-xs text-gray-500">{label}</p>
+    <div className="rounded-xl border border-line/5 bg-sunken/50 p-4">
+      <p className="text-xs text-muted">{label}</p>
       <p
         className={`mt-1 text-lg font-semibold ${
-          highlight ? "text-stellar-400" : "text-white"
+          highlight ? "text-info" : "text-ink"
         }`}
       >
         {value}
@@ -465,8 +466,8 @@ function StatCard({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-mono text-gray-300">{value}</span>
+      <span className="text-muted">{label}</span>
+      <span className="data text-body">{value}</span>
     </div>
   );
 }

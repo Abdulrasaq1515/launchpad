@@ -19,8 +19,8 @@ export function VestingLookup({
   const t = useTranslations("myAccount");
 
   return (
-    <div className="glass-card p-5">
-      <p className="mb-3 text-xs text-gray-400">
+    <div className="panel p-5">
+      <p className="mb-3 text-xs text-muted">
         {t("vestingLookupDescription")}
       </p>
       <div className="flex gap-2">
@@ -29,7 +29,7 @@ export function VestingLookup({
           value={vestingContractId}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t("vestingPlaceholder")}
-          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-stellar-400/50 focus:ring-1 focus:ring-stellar-400/30"
+          className="flex-1 rounded-lg border border-line bg-sunken px-4 py-2 text-sm text-ink placeholder-faint outline-none transition-colors focus:border-info/50 focus:ring-1 focus:ring-info/30"
         />
         <button
           onClick={onLookup}
@@ -45,7 +45,7 @@ export function VestingLookup({
         </button>
       </div>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </div>
   );
 }

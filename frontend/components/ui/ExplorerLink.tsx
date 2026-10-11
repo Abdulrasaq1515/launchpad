@@ -54,7 +54,7 @@ export function ExplorerLink({
         href={explorerUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 font-mono text-stellar-400 transition-colors hover:text-stellar-300 hover:underline"
+        className="inline-flex items-center gap-1 data text-info transition-colors hover:text-info hover:underline"
         title={linkLabel}
         aria-label={linkLabel}
       >

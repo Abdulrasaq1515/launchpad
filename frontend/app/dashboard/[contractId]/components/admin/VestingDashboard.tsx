@@ -62,22 +62,22 @@ const STATUS_META: Record<
 > = {
   cliff_pending: {
     label: "Cliff pending",
-    className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    className: "bg-warn-soft text-warn border-warn/20",
     icon: <Clock className="h-3 w-3" />,
   },
   vesting: {
     label: "Vesting",
-    className: "bg-stellar-500/10 text-stellar-400 border-stellar-500/20",
+    className: "bg-info-soft text-info border-info/20",
     icon: <TrendingUp className="h-3 w-3" />,
   },
   fully_vested: {
     label: "Fully vested",
-    className: "bg-green-500/10 text-green-400 border-green-500/20",
+    className: "bg-ok-soft text-ok border-ok/20",
     icon: <CheckCircle2 className="h-3 w-3" />,
   },
   revoked: {
     label: "Revoked",
-    className: "bg-red-500/10 text-red-400 border-red-500/20",
+    className: "bg-danger-soft text-danger border-danger/20",
     icon: <XCircle className="h-3 w-3" />,
   },
 };
@@ -101,12 +101,12 @@ function StatusChip({ status }: { status: ScheduleStatus }) {
 function SolvencyBadge({ solvent }: { solvent: boolean | null }) {
   if (solvent === null) return null;
   return solvent ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-400">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-ok/30 bg-ok-soft px-3 py-1 text-xs font-semibold text-ok">
       <CheckCircle2 className="h-3.5 w-3.5" />
       Solvent
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-400">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-soft px-3 py-1 text-xs font-semibold text-danger">
       <AlertTriangle className="h-3.5 w-3.5" />
       Underfunded
     </span>
@@ -131,38 +131,38 @@ function SummaryStrip({
 
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div className="glass-card p-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+      <div className="panel p-3">
+        <p className="text-xs font-medium text-muted">
           Total committed
         </p>
-        <p className="mt-1 truncate text-base font-semibold text-white">
+        <p className="mt-1 truncate text-base font-semibold text-ink">
           {fmt(summary.totalCommitted)}
           {tick}
         </p>
       </div>
-      <div className="glass-card p-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+      <div className="panel p-3">
+        <p className="text-xs font-medium text-muted">
           Total vested
         </p>
-        <p className="mt-1 truncate text-base font-semibold text-stellar-400">
+        <p className="mt-1 truncate text-base font-semibold text-info">
           {fmt(summary.totalVested)}
           {tick}
         </p>
       </div>
-      <div className="glass-card p-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+      <div className="panel p-3">
+        <p className="text-xs font-medium text-muted">
           Total released
         </p>
-        <p className="mt-1 truncate text-base font-semibold text-green-400">
+        <p className="mt-1 truncate text-base font-semibold text-ok">
           {fmt(summary.totalReleased)}
           {tick}
         </p>
       </div>
-      <div className="glass-card p-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+      <div className="panel p-3">
+        <p className="text-xs font-medium text-muted">
           Remaining
         </p>
-        <p className="mt-1 truncate text-base font-semibold text-white">
+        <p className="mt-1 truncate text-base font-semibold text-ink">
           {fmt(summary.totalRemaining)}
           {tick}
         </p>
@@ -196,7 +196,7 @@ function ProjectionChart({
 
   if (!hasData) {
     return (
-      <div className="flex h-40 items-center justify-center text-sm text-gray-500">
+      <div className="flex h-40 items-center justify-center text-sm text-muted">
         No projected unlocks in the next 12 months.
       </div>
     );
@@ -239,7 +239,7 @@ function ProjectionChart({
             color: "#fff",
             fontSize: "12px",
           }}
-          formatter={(v: number) => [v.toLocaleString(), "Unlocks"]}
+          formatter={(v) => [Number(v ?? 0).toLocaleString(), "Unlocks"]}
         />
         <Area
           type="monotone"
@@ -281,11 +281,11 @@ function SortIcon({
   dir: SortDir;
 }) {
   if (field !== active)
-    return <ChevronUp className="h-3 w-3 text-gray-600" />;
+    return <ChevronUp className="h-3 w-3 text-faint" />;
   return dir === "asc" ? (
-    <ChevronUp className="h-3 w-3 text-stellar-400" />
+    <ChevronUp className="h-3 w-3 text-info" />
   ) : (
-    <ChevronDown className="h-3 w-3 text-stellar-400" />
+    <ChevronDown className="h-3 w-3 text-info" />
   );
 }
 
@@ -308,7 +308,7 @@ function SortableTh({
 }) {
   return (
     <th
-      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300 ${className}`}
+      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-muted hover:text-body ${className}`}
       onClick={() => onSort(field)}
     >
       <span className="inline-flex items-center gap-1">
@@ -396,13 +396,13 @@ function VestingTable({
         value={search}
         onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         placeholder="Filter by address…"
-        className="w-full rounded-lg border border-white/10 bg-void-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-stellar-500 focus:ring-1 focus:ring-stellar-500"
+        className="w-full rounded-lg border border-line bg-sunken px-3 py-2 text-sm text-ink placeholder-faint outline-none focus:border-info focus:ring-1 focus:ring-info"
       />
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-white/5">
+      <div className="overflow-x-auto rounded-xl border border-line/5">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-white/5 bg-white/2">
+          <thead className="border-b border-line/5 bg-white/2">
             <tr>
               <SortableTh field="address" active={sortField} dir={sortDir} onSort={toggleSort}>Recipient</SortableTh>
               <SortableTh field="trancheCount" className="text-center" active={sortField} dir={sortDir} onSort={toggleSort}>Tranches</SortableTh>
@@ -414,12 +414,12 @@ function VestingTable({
               <SortableTh field="status" active={sortField} dir={sortDir} onSort={toggleSort}>Status</SortableTh>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-line/5">
             {paginated.length === 0 ? (
               <tr>
                 <td
                   colSpan={8}
-                  className="py-8 text-center text-sm text-gray-500"
+                  className="py-8 text-center text-sm text-muted"
                 >
                   {search ? "No recipients match your filter." : "No vesting schedules found."}
                 </td>
@@ -439,26 +439,26 @@ function VestingTable({
                       showCopy
                     />
                   </td>
-                  <td className="px-3 py-2.5 text-center text-gray-300">
+                  <td className="px-3 py-2.5 text-center text-body">
                     {row.trancheCount}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-gray-200">
+                  <td className="px-3 py-2.5 data text-xs text-ink">
                     {fmt(row.totalAmount)}
                     {tick}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-stellar-400">
+                  <td className="px-3 py-2.5 data text-xs text-info">
                     {fmt(row.vested)}
                     {tick}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-green-400">
+                  <td className="px-3 py-2.5 data text-xs text-ok">
                     {fmt(row.released)}
                     {tick}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-white">
+                  <td className="px-3 py-2.5 data text-xs text-ink">
                     {fmt(row.remaining)}
                     {tick}
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-gray-400">
+                  <td className="px-3 py-2.5 text-xs text-muted">
                     {row.nextUnlockDate
                       ? row.nextUnlockDate.toLocaleDateString("en-US", {
                           month: "short",
@@ -479,7 +479,7 @@ function VestingTable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-between text-xs text-muted">
           <span>
             {filtered.length} recipient{filtered.length !== 1 ? "s" : ""}
           </span>
@@ -487,7 +487,7 @@ function VestingTable({
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="rounded p-1 hover:bg-white/5 disabled:opacity-30"
+              className="rounded p-1 hover:bg-sunken disabled:opacity-30"
               aria-label="Previous page"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -498,7 +498,7 @@ function VestingTable({
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="rounded p-1 hover:bg-white/5 disabled:opacity-30"
+              className="rounded p-1 hover:bg-sunken disabled:opacity-30"
               aria-label="Next page"
             >
               <ChevronRight className="h-4 w-4" />
@@ -599,7 +599,7 @@ export function VestingDashboard({
                   vestingInput.slice(0, 8) || "vesting",
                 )
               }
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-sunken px-3 py-1.5 text-xs text-body transition-colors hover:bg-sunken"
               title="Export CSV"
             >
               <Download className="h-3.5 w-3.5" />
@@ -609,7 +609,7 @@ export function VestingDashboard({
           <button
             onClick={handleLoad}
             disabled={loading || !vestingInput.trim()}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-sunken px-3 py-1.5 text-xs text-body transition-colors hover:bg-sunken disabled:opacity-40"
             title="Refresh"
           >
             <RefreshCw
@@ -628,7 +628,7 @@ export function VestingDashboard({
             value={vestingInput}
             onChange={(e) => setVestingInput(e.target.value)}
             placeholder="Vesting contract address (C…)"
-            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-stellar-500 focus:ring-1 focus:ring-stellar-500"
+            className="flex-1 rounded-lg border border-line bg-sunken px-3 py-2 text-sm text-ink placeholder-faint outline-none focus:border-info focus:ring-1 focus:ring-info"
             onKeyDown={(e) => e.key === "Enter" && handleLoad()}
           />
           <button
@@ -646,15 +646,15 @@ export function VestingDashboard({
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm text-gray-400">
-            <Loader2 className="h-5 w-5 animate-spin text-stellar-400" />
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted">
+            <Loader2 className="h-5 w-5 animate-spin text-info" />
             Fetching all recipients and schedules…
           </div>
         )}
 
         {/* Error */}
         {!loading && error && (
-          <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400">
+          <div className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger-soft p-4 text-sm text-danger">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             {error}
           </div>
@@ -672,7 +672,7 @@ export function VestingDashboard({
 
             {/* Paused warning */}
             {data.summary.isPaused && (
-              <div className="flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3 text-sm text-orange-400">
+              <div className="flex items-center gap-2 rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-warn">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Vesting contract is currently paused — releases are blocked.
               </div>
@@ -681,7 +681,7 @@ export function VestingDashboard({
             {/* 12-month projection chart */}
             {data.rows.length > 0 && (
               <div>
-                <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <h4 className="mb-3 text-xs font-medium text-muted">
                   Projected unlocks — next 12 months
                 </h4>
                 <ProjectionChart
@@ -693,11 +693,11 @@ export function VestingDashboard({
 
             {/* Recipient table */}
             <div>
-              <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-gray-500">
+              <h4 className="mb-3 text-xs font-medium text-muted">
                 Recipients ({data.rows.length})
               </h4>
               {data.rows.length === 0 ? (
-                <p className="py-6 text-center text-sm text-gray-500">
+                <p className="py-6 text-center text-sm text-muted">
                   No vesting schedules found on this contract.
                 </p>
               ) : (

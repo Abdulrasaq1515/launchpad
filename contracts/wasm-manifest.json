@@ -3,14 +3,18 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "ac3360a0b4be58a0729f6aecdf9c413c625ffb89f39df4aa185e0b9f8d2c4ac7",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 39884,
+        "networks": {
+          "testnet": "ac3360a0b4be58a0729f6aecdf9c413c625ffb89f39df4aa185e0b9f8d2c4ac7"
+        }
       }
     },
     "build_info": {
-      "sdk_version": "21.0.0",
-      "rust_version": "stable",
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
       "profile": "release"
     }
   },
@@ -18,29 +22,18 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "307ef4000b6309a9acf87fa376ea9005fd063ae4c656351bf283d936b421a767",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 26193,
+        "networks": {
+          "testnet": "307ef4000b6309a9acf87fa376ea9005fd063ae4c656351bf283d936b421a767"
+        }
       }
     },
     "build_info": {
-      "sdk_version": "21.0.0",
-      "rust_version": "stable",
-      "profile": "release"
-    }
-  },
-  "airdrop": {
-    "latest": "v1.0.0",
-    "versions": {
-      "v1.0.0": {
-        "wasm_hash": "",
-        "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
-      }
-    },
-    "build_info": {
-      "sdk_version": "21.0.0",
-      "rust_version": "stable",
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
       "profile": "release"
     }
   },
@@ -48,30 +41,57 @@
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "1aad60736057c5a907598c029ee34868e75a559069aa6585afd6e03d1615af32",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 18129,
+        "networks": {
+          "testnet": "1aad60736057c5a907598c029ee34868e75a559069aa6585afd6e03d1615af32"
+        }
       }
     },
-    "deployments": {
-      "testnet": {
-        "address": "",
-        "wasm_hash": ""
-      },
-      "mainnet": {
-        "address": "",
-        "wasm_hash": ""
+    "build_info": {
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
+      "profile": "release"
+    }
+  },
+  "airdrop": {
+    "latest": "v1.0.0",
+    "versions": {
+      "v1.0.0": {
+        "wasm_hash": "443942d5c3382e7db2b9982730eba35c68fa761ed175202815f7ef55589ba230",
+        "source_tag": "v1.0.0",
+        "wasm_bytes": 17357,
+        "networks": {
+          "testnet": "443942d5c3382e7db2b9982730eba35c68fa761ed175202815f7ef55589ba230"
+        }
       }
+    },
+    "build_info": {
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
+      "profile": "release"
     }
   },
   "metadata_registry": {
     "latest": "v1.0.0",
     "versions": {
       "v1.0.0": {
-        "wasm_hash": "",
+        "wasm_hash": "83cec4e0d078bfdfd339c8bedd7067c27e5830bd6a664c5dacaa737dd18bc979",
         "source_tag": "v1.0.0",
-        "build_ledger": "soroban-sdk-21.0.0"
+        "wasm_bytes": 8870,
+        "networks": {
+          "testnet": "83cec4e0d078bfdfd339c8bedd7067c27e5830bd6a664c5dacaa737dd18bc979"
+        }
       }
+    },
+    "build_info": {
+      "sdk_version": "27.0.6",
+      "rust_version": "1.98.1",
+      "target": "wasm32v1-none",
+      "profile": "release"
     }
   }
 }

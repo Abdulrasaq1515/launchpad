@@ -22,19 +22,19 @@ export function PersonalActivityTable({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case "mint": return <Droplets className="h-4 w-4 text-blue-400" />;
-      case "burn": return <Flame className="h-4 w-4 text-red-400" />;
-      case "transfer": return <ArrowLeftRight className="h-4 w-4 text-green-400" />;
-      default: return <ArrowRight className="h-4 w-4 text-gray-400" />;
+      case "mint": return <Droplets className="h-4 w-4 text-info" />;
+      case "burn": return <Flame className="h-4 w-4 text-danger" />;
+      case "transfer": return <ArrowLeftRight className="h-4 w-4 text-ok" />;
+      default: return <ArrowRight className="h-4 w-4 text-muted" />;
     }
   };
 
   const getStyleForType = (type: string) => {
     switch (type) {
-      case "mint": return "text-blue-400 bg-blue-400/10 border-blue-400/20";
-      case "burn": return "text-red-400 bg-red-400/10 border-red-400/20";
-      case "transfer": return "text-green-400 bg-green-400/10 border-green-400/20";
-      default: return "text-gray-400 bg-gray-400/10 border-gray-400/20";
+      case "mint": return "text-info bg-info-soft border-info/20";
+      case "burn": return "text-danger bg-danger-soft border-danger/20";
+      case "transfer": return "text-ok bg-ok-soft border-ok/20";
+      default: return "text-muted bg-gray-400/10 border-gray-400/20";
     }
   };
 
@@ -47,27 +47,27 @@ export function PersonalActivityTable({
 
   if (operations.length === 0) {
     return (
-      <div className="glass-card p-8 text-center text-sm text-gray-500">
+      <div className="panel p-8 text-center text-sm text-muted">
         No personal transaction history found.
       </div>
     );
   }
 
   return (
-    <div className="glass-card overflow-hidden">
+    <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm" role="table" aria-label="Personal transaction history">
           <thead>
-            <tr className="border-b border-white/5 bg-white/5">
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Direction</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{tc("amount")}</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Counterparty</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Time</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Tx</th>
+            <tr className="border-b border-line/5 bg-sunken">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted">Type</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted">Direction</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted">{tc("amount")}</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted">Counterparty</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted">Time</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted">Tx</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-line/5">
             {operations.map((op, i) => {
               const direction = getDirection(op);
               const counterparty = op.from === publicKey ? op.to : op.from;
@@ -81,21 +81,21 @@ export function PersonalActivityTable({
                   </td>
                   <td className="px-4 py-3">
                     {direction && (
-                      <span className={`text-xs font-medium ${direction === "Sent" ? "text-red-400" : "text-green-400"}`}>{direction}</span>
+                      <span className={`text-xs font-medium ${direction === "Sent" ? "text-danger" : "text-ok"}`}>{direction}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-white">{op.amount !== "-" ? op.amount : "-"}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-stellar-300">
+                  <td className="px-4 py-3 text-right data text-ink">{op.amount !== "-" ? op.amount : "-"}</td>
+                  <td className="px-4 py-3 data text-xs text-info">
                     {counterparty && counterparty !== "-" ? (
                       <span title={counterparty}>{truncateAddress(counterparty, 5)}</span>
                     ) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-400">
+                  <td className="px-4 py-3 text-right text-xs text-muted">
                     {new Date(op.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <a href={`https://stellar.expert/explorer/testnet/tx/${op.txHash}`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded text-xs text-stellar-400 hover:text-stellar-300 hover:underline" title="View on Stellar Expert">
+                      className="inline-flex items-center gap-1 rounded text-xs text-info hover:text-info hover:underline" title="View on Stellar Expert">
                       View<ArrowUpRight className="h-3 w-3" />
                     </a>
                   </td>
@@ -106,7 +106,7 @@ export function PersonalActivityTable({
         </table>
       </div>
       {hasMore && (
-        <div className="border-t border-white/5 p-4 text-center">
+        <div className="border-t border-line/5 p-4 text-center">
           <button onClick={onLoadMore} disabled={loadingMore} className="btn-secondary inline-flex items-center gap-2 px-4 py-2 text-sm">
             {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
             {loadingMore ? tc("loading") : tc("loadMore")}

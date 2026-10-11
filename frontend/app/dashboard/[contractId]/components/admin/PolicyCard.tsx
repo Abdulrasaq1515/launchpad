@@ -76,10 +76,10 @@ export function PolicyCard({
         >
           <div className="space-y-4">
             <div>
-              <h4 className="text-sm font-semibold text-white mb-1">
+              <h4 className="text-sm font-semibold text-ink mb-1">
                 Whale Protection
               </h4>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted">
                 Limits the maximum balance any non-admin account can hold, as a
                 percentage of the total supply.
               </p>
@@ -88,22 +88,22 @@ export function PolicyCard({
               className={
                 "text-xs px-3 py-2 rounded-lg border flex items-center justify-between " +
                 (locked
-                  ? "text-gray-400 bg-white/5 border-yellow-500/20"
-                  : "text-stellar-200 bg-white/5 border-white/10")
+                  ? "text-muted bg-sunken border-warn/20"
+                  : "text-info bg-sunken border-line")
               }
             >
               <span>Current Max Balance Cap:</span>
               <span
                 className={
                   "font-semibold " +
-                  (capIsActive ? "text-stellar-400" : "text-yellow-400")
+                  (capIsActive ? "text-info" : "text-warn")
                 }
               >
                 {whaleCap !== null ? `${whaleCap}% of total supply` : "None"}
               </span>
             </div>
             {locked && (
-              <div className="flex items-start gap-2 text-[10px] leading-relaxed text-yellow-400 bg-yellow-500/5 p-2.5 rounded-lg border border-yellow-500/10">
+              <div className="flex items-start gap-2 text-[10px] leading-relaxed text-warn bg-warn-soft p-2.5 rounded-lg border border-warn/10">
                 <AlertTriangle
                   className="w-3.5 h-3.5 shrink-0 mt-0.5"
                   aria-hidden="true"
@@ -121,7 +121,7 @@ export function PolicyCard({
               label="Percentage Cap (1-100)"
               type="number"
               placeholder="1-100"
-              className="bg-white/5 border-white/10"
+              className="bg-sunken border-line"
               {...whaleForm.register("cap")}
               error={whaleForm.formState.errors.cap?.message}
               disabled={disabled}
@@ -130,7 +130,7 @@ export function PolicyCard({
           <div className="flex gap-2 mt-4">
             <Button
               type="submit"
-              className="flex-1 bg-stellar-500 hover:bg-stellar-600 text-white shadow-lg shadow-stellar-500/20"
+              className="flex-1 bg-info hover:bg-info text-ink"
               isLoading={admin.loading === "set-whale-cap"}
               disabled={disabled}
             >
@@ -139,7 +139,7 @@ export function PolicyCard({
             <Button
               type="button"
               variant="secondary"
-              className="border-red-500/20 text-red-400 hover:border-red-500/40"
+              className="border-danger/20 text-danger hover:border-danger/40"
               isLoading={admin.loading === "disable-whale-cap"}
               disabled={disabled || !capEnabled}
               onClick={async () =>
@@ -156,21 +156,21 @@ export function PolicyCard({
           onSubmit={complianceForm.handleSubmit(async (data) =>
             afterComplianceNode(await admin.run("set-compliance-node", data)),
           )}
-          className="space-y-4 flex flex-col justify-between border-t md:border-t-0 md:border-l border-white/10 pt-6 md:pt-0 md:pl-8"
+          className="space-y-4 flex flex-col justify-between border-t md:border-t-0 md:border-l border-line pt-6 md:pt-0 md:pl-8"
         >
           <div className="space-y-4">
             <div>
-              <h4 className="text-sm font-semibold text-white mb-1">
+              <h4 className="text-sm font-semibold text-ink mb-1">
                 Compliance Node
               </h4>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted">
                 Set a compliance gating contract to inspect and authorize
                 transfers.
               </p>
             </div>
-            <div className="text-xs text-stellar-200 bg-white/5 px-3 py-2 rounded-lg border border-white/10 flex flex-col gap-1">
-              <span className="text-gray-400">Current Node Address:</span>
-              <span className="font-semibold text-stellar-400 break-all min-h-[1.5rem] flex items-center">
+            <div className="text-xs text-info bg-sunken px-3 py-2 rounded-lg border border-line flex flex-col gap-1">
+              <span className="text-muted">Current Node Address:</span>
+              <span className="font-semibold text-info break-all min-h-[1.5rem] flex items-center">
                 {complianceNode ? (
                   <ExplorerLink
                     type="contract"
@@ -187,7 +187,7 @@ export function PolicyCard({
             <Input
               label="Contract ID"
               placeholder="C..."
-              className="bg-white/5 border-white/10"
+              className="bg-sunken border-line"
               {...complianceForm.register("address")}
               error={complianceForm.formState.errors.address?.message}
               disabled={disabled}
@@ -197,7 +197,7 @@ export function PolicyCard({
             <div className="flex gap-2">
               <Button
                 type="submit"
-                className="flex-1 bg-stellar-500 hover:bg-stellar-600 text-white shadow-lg shadow-stellar-500/20"
+                className="flex-1 bg-info hover:bg-info text-ink"
                 isLoading={admin.loading === "set-compliance-node"}
                 disabled={disabled}
               >
@@ -206,7 +206,7 @@ export function PolicyCard({
               <Button
                 type="button"
                 variant="secondary"
-                className="border-red-500/20 text-red-400 hover:border-red-500/40"
+                className="border-danger/20 text-danger hover:border-danger/40"
                 isLoading={admin.loading === "clear-compliance-node"}
                 disabled={disabled || !complianceNode}
                 onClick={async () =>
@@ -219,7 +219,7 @@ export function PolicyCard({
               </Button>
             </div>
 
-            <div className="flex items-start gap-2 text-[10px] leading-relaxed text-yellow-400 bg-yellow-500/5 p-2.5 rounded-lg border border-yellow-500/10">
+            <div className="flex items-start gap-2 text-[10px] leading-relaxed text-warn bg-warn-soft p-2.5 rounded-lg border border-warn/10">
               <AlertTriangle
                 className="w-3.5 h-3.5 shrink-0 mt-0.5"
                 aria-hidden="true"

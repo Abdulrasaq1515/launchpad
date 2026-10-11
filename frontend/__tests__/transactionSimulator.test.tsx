@@ -17,6 +17,7 @@ import {
 } from "@testing-library/react";
 import { useTransactionSimulator } from "@/hooks/useTransactionSimulator";
 import { ToastProvider } from "@/app/providers/ToastProvider";
+import { scValToNative } from "@/lib/soroban";
 
 // Mock useNetwork
 jest.mock("@/app/providers/NetworkProvider", () => ({
@@ -324,30 +325,30 @@ describe("Simulation with Mock RPC", () => {
 
 describe("buildRevokeAllowanceArgs", () => {
   it("returns four ScVal arguments", () => {
-    const owner = "GBPLA3EQJGNQFHZNQWUZ3Z7YZY7QZ5RZQ5JQ5JQ5JQ5JQ5JQ5JQ5JQ5";
-    const spender = "GCTV2QEQJGNQFHZNQWUZ3Z7YZY7QZ5RZQ5JQ5JQ5JQ5JQ5JQ5JQ5JQ5";
+    const owner = "GAEQZ5WIT3VJQ35W2JCQXFFKGUKOCKSCUZGWGVXQLZCMNXKXWKFQ7TV6";
+    const spender = "GBONK2FUFJBONR6E7H6UN7H26ZNQYUCCF6YQRATRYWK3FOJGDBD3MXKX";
     const args = buildRevokeAllowanceArgs(owner, spender);
 
     expect(args).toHaveLength(4);
   });
 
   it("passes 0 for amount and expiration_ledger", () => {
-    const owner = "GBPLA3EQJGNQFHZNQWUZ3Z7YZY7QZ5RZQ5JQ5JQ5JQ5JQ5JQ5JQ5JQ5";
-    const spender = "GCTV2QEQJGNQFHZNQWUZ3Z7YZY7QZ5RZQ5JQ5JQ5JQ5JQ5JQ5JQ5JQ5";
+    const owner = "GAEQZ5WIT3VJQ35W2JCQXFFKGUKOCKSCUZGWGVXQLZCMNXKXWKFQ7TV6";
+    const spender = "GBONK2FUFJBONR6E7H6UN7H26ZNQYUCCF6YQRATRYWK3FOJGDBD3MXKX";
     const args = buildRevokeAllowanceArgs(owner, spender);
 
-    // owner and spender are Address ScVals — just verify they're present
-    expect(args[0]).toBeDefined();
-    expect(args[1]).toBeDefined();
-
-    // amount (i128) must be 0
-    const amountVal = args[2].value() as { hi: number; lo: number };
-    expect(amountVal.hi).toBe(0);
-    expect(amountVal.lo).toBe(0);
-
-    // expiration_ledger (u32) must be 0
-    const expVal = args[3].value() as number;
-    expect(expVal).toBe(0);
+    // Decode rather than reach into the XDR union: an i128's .value() is an
+    // Int128Parts whose hi/lo are accessor *functions*, so comparing them to 0
+    // passes vacuously in the wrong direction and silently asserted nothing.
+    expect(scValToNative(args[0])).toBe(owner);
+    expect(scValToNative(args[1])).toBe(spender);
+    // Stringified: jest-worker cannot serialize a BigInt across the worker
+    // boundary, so a raw 0n here fails the whole suite rather than the test.
+    expect(String(scValToNative(args[2]))).toBe("0");
+    expect(scValToNative(args[3])).toBe(0);
+    // And it must survive serialisation — the bug this test caught was an
+    // ScVal that only failed at toXDR() time.
+    expect(() => args.forEach((a) => a.toXDR("base64"))).not.toThrow();
   });
 });
 

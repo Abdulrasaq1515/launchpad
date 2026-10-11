@@ -10,6 +10,10 @@ const createJestConfig = nextJest({
 const config: Config = {
     coverageProvider: 'v8',
     testEnvironment: 'jsdom',
+    // Playwright owns everything under e2e/. Jest used to pick those specs up
+    // and fail on the '@playwright/test' import, which is how a stray spec at
+    // the repo root went unnoticed.
+    testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/e2e/', '<rootDir>/.next/'],
     // Add more setup options before each test is run
     setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
     coverageThreshold: {

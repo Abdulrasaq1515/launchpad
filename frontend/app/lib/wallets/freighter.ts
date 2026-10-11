@@ -14,7 +14,7 @@ import type { WalletAdapter } from "./types";
 export const freighterAdapter: WalletAdapter = {
   id: "freighter",
   name: "Freighter",
-  icon: "🚀",
+  icon: "FR",
 
   async isAvailable(): Promise<boolean> {
     try {

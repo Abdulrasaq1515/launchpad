@@ -128,8 +128,8 @@ export function RevokeAllowanceForm({ onSuccess, onError }: RevokeAllowanceFormP
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white mb-4">Revoke Allowance</h2>
-        <p className="text-sm text-gray-400 mb-6">
+        <h2 className="text-xl font-semibold text-ink mb-4">Revoke Allowance</h2>
+        <p className="text-sm text-muted mb-6">
           Remove the ability of a spender to transfer tokens on your behalf.
         </p>
       </div>
@@ -139,7 +139,7 @@ export function RevokeAllowanceForm({ onSuccess, onError }: RevokeAllowanceFormP
           label="Token Contract ID"
           {...register("tokenContractId")}
           placeholder="C..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.tokenContractId?.message}
         />
 
@@ -147,7 +147,7 @@ export function RevokeAllowanceForm({ onSuccess, onError }: RevokeAllowanceFormP
           label="Spender Address"
           {...register("spenderAddress")}
           placeholder="G..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.spenderAddress?.message}
         />
       </div>
@@ -161,18 +161,18 @@ export function RevokeAllowanceForm({ onSuccess, onError }: RevokeAllowanceFormP
       )}
 
       {txHash && (
-        <div className="flex items-center gap-3 p-4 bg-green-600/10 border border-green-600/50 rounded-lg">
-          <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 p-4 bg-ok-soft border border-ok/50 rounded-lg">
+          <CheckCircle className="h-5 w-5 text-ok flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-green-400">Allowance revoked!</p>
-            <p className="text-xs text-green-300">TX: {txHash}</p>
+            <p className="text-sm font-medium text-ok">Allowance revoked!</p>
+            <p className="text-xs text-ok">TX: {txHash}</p>
           </div>
         </div>
       )}
 
       {showConfirm && preflightResult?.success && (
-        <div className="p-4 bg-yellow-600/10 border border-yellow-600/50 rounded-lg">
-          <p className="text-sm text-yellow-300 font-medium mb-3">
+        <div className="p-4 bg-warn-soft border border-warn/50 rounded-lg">
+          <p className="text-sm text-warn font-medium mb-3">
             Are you sure? Once revoked, {formData.spenderAddress.slice(0, 8)}... cannot transfer
             your tokens.
           </p>
@@ -225,7 +225,7 @@ export function RevokeAllowanceForm({ onSuccess, onError }: RevokeAllowanceFormP
         {preflightResult?.success && !showConfirm && (
           <Button
             onClick={() => setShowConfirm(true)}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700"
+            className="flex items-center gap-2 bg-danger hover:bg-red-700"
           >
             <Trash2 className="h-4 w-4" />
             Revoke Allowance

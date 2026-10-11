@@ -1,6 +1,7 @@
 import {
   ADMIN_ACTIONS,
   type AdminActionKey,
+  type AdminActionContext,
 } from "../adminActions";
 import { toBaseUnits } from "@/lib/utils";
 import { LEDGERS_PER_DAY } from "@/lib/soroban";
@@ -10,6 +11,13 @@ import { LEDGERS_PER_DAY } from "@/lib/soroban";
  * component with two parallel if/else chains was independently reachable.
  * With the capabilities declared as data, the mapping from form input to
  * contract call is now directly assertable.
+ *
+ * Each action resolves by calling a method on a typed binding client, so the
+ * clients are stubbed with recorders: the call a resolver makes is captured as
+ * `{ contractId, method, args }` and asserted against. Arguments are the
+ * bindings' named objects rather than positional ScVals, so the assertions
+ * check field names — which is what actually has to stay in step with the
+ * contract.
  */
 
 const TOKEN = "CBTSFDGN5MU5NRKWSIBCMAMUGCHOC52H7KLZ44OKSGLC26BUKBZCCERJ";
@@ -20,6 +28,33 @@ const ADMIN = "GBONK2FUFJBONR6E7H6UN7H26ZNQYUCCF6YQRATRYWK3FOJGDBD3MXKX";
 /** `create_schedule` / `extend_cliff` resolve ledgers relative to "now". */
 const CURRENT_LEDGER = 1_000_000;
 
+/** What a stubbed client records when a resolver invokes it. */
+interface RecordedCall {
+  contractId: string;
+  method: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * A stand-in for a generated binding client. Every property access returns a
+ * function that records the call and hands back a value shaped enough like an
+ * `AssembledTransaction` for the resolver's return type.
+ */
+function recordingClient(contractId: string) {
+  return new Proxy(
+    {},
+    {
+      get:
+        (_target, method: string) =>
+        (args: Record<string, unknown> = {}) => ({
+          contractId,
+          method,
+          args,
+          built: null,
+        }),
+    },
+  );
+}
 
 function makeContext(): AdminActionContext {
   return {
@@ -30,12 +65,20 @@ function makeContext(): AdminActionContext {
       getLatestLedger: async () => ({ sequence: CURRENT_LEDGER }),
     } as unknown as AdminActionContext["server"],
     simulator: {} as AdminActionContext["simulator"],
+    tokenClient: recordingClient(TOKEN) as AdminActionContext["tokenClient"],
+    getVestingClient: (id: string) =>
+      recordingClient(id) as ReturnType<AdminActionContext["getVestingClient"]>,
   };
 }
 
-/** Decode an Address ScVal back to its strkey. */
-function addressOf(value: xdr.ScVal): string {
-  return Address.fromScVal(value).toString();
+/** Run an action's resolver and read back what it asked the client to do. */
+async function resolveCall(
+  key: AdminActionKey,
+  data: unknown,
+  ctx: AdminActionContext = makeContext(),
+): Promise<RecordedCall> {
+  const def = ADMIN_ACTIONS[key] as { resolve: (d: unknown, c: AdminActionContext) => unknown };
+  return (await def.resolve(data, ctx)) as unknown as RecordedCall;
 }
 
 describe("toBaseUnits (scaling primitive)", () => {
@@ -69,6 +112,7 @@ describe("ADMIN_ACTIONS registry", () => {
       "vesting",
       "extend-cliff",
       "vesting-revoke",
+      "vesting-upgrade",
       "set-whale-cap",
       "disable-whale-cap",
       "set-compliance-node",
@@ -88,83 +132,61 @@ describe("ADMIN_ACTIONS registry", () => {
 
 describe("action resolution", () => {
   it("scales mint amounts by the token's decimals", async () => {
-    const call = await ADMIN_ACTIONS.mint.resolve(
-      { to: ALICE, amount: "2.5" },
-      makeContext(),
-    );
+    const call = await resolveCall("mint", { to: ALICE, amount: "2.5" });
     expect(call.method).toBe("mint");
-    expect(addressOf(call.args[0])).toBe(ALICE);
-    expect(scValToNative(call.args[1])).toBe(25_000_000n);
+    expect(call.args.to).toBe(ALICE);
+    expect(call.args.amount).toBe(25_000_000n);
   });
 
   it("routes burn and clawback to distinct contract methods", async () => {
-    const ctx = makeContext();
     const data = { from: ALICE, amount: "1" };
-    expect((await ADMIN_ACTIONS.clawback.resolve(data, ctx)).method).toBe(
-      "clawback",
-    );
-    expect((await ADMIN_ACTIONS["burn-admin"].resolve(data, ctx)).method).toBe(
-      "burn_admin",
-    );
+    expect((await resolveCall("clawback", data)).method).toBe("clawback");
+    expect((await resolveCall("burn-admin", data)).method).toBe("burn_admin");
   });
 
   it("routes cancellation through the dedicated on-chain cancel method", async () => {
-    const call = await ADMIN_ACTIONS["cancel-admin"].resolve({}, makeContext());
+    const call = await resolveCall("cancel-admin", {});
     expect(call.method).toBe("cancel_admin_proposal");
-    expect(call.args).toHaveLength(0);
+    expect(call.contractId).toBe(TOKEN);
   });
 
   it("targets the vesting contract, not the token, for schedule actions", async () => {
-    const call = await ADMIN_ACTIONS.vesting.resolve(
-      {
-        vestingContract: VESTING,
-        recipient: ALICE,
-        amount: "10",
-        cliffDays: "30",
-        durationDays: "365",
-      },
-      makeContext(),
-    );
+    const call = await resolveCall("vesting", {
+      vestingContract: VESTING,
+      recipient: ALICE,
+      amount: "10",
+      cliffDays: "30",
+      durationDays: "365",
+    });
     expect(call.contractId).toBe(VESTING);
     expect(call.method).toBe("create_schedule");
 
     const cliffLedger = CURRENT_LEDGER + 30 * LEDGERS_PER_DAY;
-    expect(scValToNative(call.args[2])).toBe(cliffLedger);
-    expect(scValToNative(call.args[3])).toBe(
-      cliffLedger + 365 * LEDGERS_PER_DAY,
-    );
+    expect(call.args.cliff_ledger).toBe(cliffLedger);
+    expect(call.args.end_ledger).toBe(cliffLedger + 365 * LEDGERS_PER_DAY);
   });
 
   it("encodes an omitted schedule index as Soroban None", async () => {
-    const ctx = makeContext();
     const base = { vestingContract: VESTING, recipient: ALICE, newCliffDays: "" };
 
-    const none = await ADMIN_ACTIONS["vesting-revoke"].resolve(
-      { ...base, scheduleIndex: "" },
-      ctx,
-    );
-    expect(none.args[1].switch()).toBe(xdr.ScValType.scvVoid());
+    const none = await resolveCall("vesting-revoke", { ...base, scheduleIndex: "" });
+    expect(none.args.index).toBeUndefined();
 
-    const some = await ADMIN_ACTIONS["vesting-revoke"].resolve(
-      { ...base, scheduleIndex: "2" },
-      ctx,
-    );
-    expect(scValToNative(some.args[1])).toBe(2);
+    const some = await resolveCall("vesting-revoke", { ...base, scheduleIndex: "2" });
+    expect(some.args.index).toBe(2);
   });
 
-  it("clears optional policy values with a void argument", async () => {
-    const ctx = makeContext();
-    const whale = await ADMIN_ACTIONS["disable-whale-cap"].resolve({}, ctx);
+  it("clears optional policy values by passing undefined", async () => {
+    const whale = await resolveCall("disable-whale-cap", {});
     expect(whale.method).toBe("set_max_balance_per_account");
-    expect(whale.args[0].switch()).toBe(xdr.ScValType.scvVoid());
+    expect(whale.args.max_balance_per_account).toBeUndefined();
 
-    const node = await ADMIN_ACTIONS["clear-compliance-node"].resolve({}, ctx);
+    const node = await resolveCall("clear-compliance-node", {});
     expect(node.method).toBe("set_compliance_node");
-    expect(node.args[0].switch()).toBe(xdr.ScValType.scvVoid());
+    expect(node.args.node).toBeUndefined();
   });
 
   it("maps the input-free lifecycle actions to their contract methods", async () => {
-    const ctx = makeContext();
     const cases: [AdminActionKey, string][] = [
       ["pause", "pause"],
       ["unpause", "unpause"],
@@ -173,49 +195,47 @@ describe("action resolution", () => {
     ];
 
     for (const [key, method] of cases) {
-      const def = ADMIN_ACTIONS[key] as (typeof ADMIN_ACTIONS)["pause"];
-      expect((await def.resolve({}, ctx)).method).toBe(method);
+      expect((await resolveCall(key, {})).method).toBe(method);
     }
   });
 
   it("maps the per-account freeze actions to their contract methods", async () => {
-    const ctx = makeContext();
-    const freeze = await ADMIN_ACTIONS.freeze.resolve({ address: ALICE }, ctx);
-    const unfreeze = await ADMIN_ACTIONS.unfreeze.resolve(
-      { address: ALICE },
-      ctx,
-    );
+    const freeze = await resolveCall("freeze", { address: ALICE });
+    const unfreeze = await resolveCall("unfreeze", { address: ALICE });
 
     expect(freeze.method).toBe("freeze_account");
     expect(unfreeze.method).toBe("unfreeze_account");
-    expect(addressOf(freeze.args[0])).toBe(ALICE);
-    expect(addressOf(unfreeze.args[0])).toBe(ALICE);
+    expect(freeze.args.addr).toBe(ALICE);
+    expect(unfreeze.args.addr).toBe(ALICE);
     // Both target the token itself, not a secondary contract.
-    expect(freeze.contractId).toBeUndefined();
+    expect(freeze.contractId).toBe(TOKEN);
   });
 
   it("maps the holder authorization actions to their contract methods", async () => {
-    const ctx = makeContext();
-    const grant = await ADMIN_ACTIONS.authorize.resolve({ address: ALICE }, ctx);
-    const revoke = await ADMIN_ACTIONS["revoke-auth"].resolve(
-      { address: ALICE },
-      ctx,
-    );
+    const grant = await resolveCall("authorize", { address: ALICE });
+    const revoke = await resolveCall("revoke-auth", { address: ALICE });
 
     expect(grant.method).toBe("authorize_holder");
     expect(revoke.method).toBe("revoke_authorization");
-    expect(addressOf(grant.args[0])).toBe(ALICE);
-    expect(addressOf(revoke.args[0])).toBe(ALICE);
+    expect(grant.args.holder).toBe(ALICE);
+    expect(revoke.args.holder).toBe(ALICE);
   });
 
   it("decodes the upgrade WASM hash into 32 raw bytes", async () => {
     const wasmHash = "ab".repeat(32);
-    const call = await ADMIN_ACTIONS.upgrade.resolve(
-      { wasmHash, confirmSymbol: "TST" },
-      makeContext(),
-    );
+    const call = await resolveCall("upgrade", { wasmHash, confirmSymbol: "TST" });
     expect(call.method).toBe("upgrade");
-    expect(call.args[0].bytes()).toHaveLength(32);
+    expect(call.args.new_wasm_hash).toHaveLength(32);
+  });
+
+  it("sends a vesting upgrade to the vesting contract, not the token", async () => {
+    const call = await resolveCall("vesting-upgrade", {
+      vestingContract: VESTING,
+      wasmHash: "cd".repeat(32),
+    });
+    expect(call.contractId).toBe(VESTING);
+    expect(call.method).toBe("upgrade");
+    expect(call.args.new_wasm_hash).toHaveLength(32);
   });
 
   it("skips preflight only for the actions that take no user input", () => {
@@ -224,7 +244,7 @@ describe("action resolution", () => {
       .map(([key]) => key)
       .sort();
     expect(skipped).toEqual(
-      ["batch-mint", "pause", "revoke", "unpause", "upgrade"].sort(),
+      ["batch-mint", "pause", "revoke", "unpause", "upgrade", "vesting-upgrade"].sort(),
     );
   });
 });

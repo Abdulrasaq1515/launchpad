@@ -36,37 +36,29 @@ export async function GET(
             width: "100%",
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#0a0a0a",
-            backgroundImage: "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)",
-            color: "white",
+            justifyContent: "space-between",
+            backgroundColor: "#ffffff",
+            color: "#14161a",
             fontFamily: "system-ui, sans-serif",
+            padding: "64px",
+            borderTop: "10px solid #f0b429",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              textAlign: "center",
-              padding: "40px",
-            }}
-          >
-            {/* Token Icon/Logo placeholder */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
             <div
               style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                backgroundColor: "#7c3aed",
+                width: "72px",
+                height: "72px",
+                borderRadius: "14px",
+                border: "2px solid #e3e6ea",
+                backgroundColor: "#f4f5f7",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: "24px",
-                fontSize: "32px",
-                fontWeight: "bold",
+                marginBottom: "28px",
+                fontSize: "26px",
+                fontWeight: 600,
+                color: "#33383f",
               }}
             >
               {tokenInfo.symbol.slice(0, 2).toUpperCase()}
@@ -75,10 +67,11 @@ export async function GET(
             {/* Token Name and Symbol */}
             <h1
               style={{
-                fontSize: "48px",
-                fontWeight: "bold",
-                margin: "0 0 8px 0",
-                color: "#ffffff",
+                fontSize: "60px",
+                fontWeight: 600,
+                letterSpacing: "-0.02em",
+                margin: "0 0 6px 0",
+                color: "#14161a",
               }}
             >
               {tokenInfo.name}
@@ -86,9 +79,9 @@ export async function GET(
 
             <p
               style={{
-                fontSize: "32px",
-                margin: "0 0 24px 0",
-                color: "#a78bfa",
+                fontSize: "30px",
+                margin: "0 0 36px 0",
+                color: "#6b727c",
               }}
             >
               ({tokenInfo.symbol})
@@ -96,45 +89,40 @@ export async function GET(
 
             {/* Token Details */}
             <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-                fontSize: "20px",
-                color: "#d1d5db",
-              }}
+              style={{ display: "flex", gap: "56px", fontSize: "22px" }}
             >
-              <div>
-                <strong>Total Supply:</strong> {tokenInfo.totalSupply}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ color: "#6b727c", fontSize: "18px" }}>Total supply</span>
+                <span style={{ color: "#14161a", fontWeight: 500 }}>{tokenInfo.totalSupply}</span>
               </div>
-              <div>
-                <strong>Decimals:</strong> {tokenInfo.decimals}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ color: "#6b727c", fontSize: "18px" }}>Decimals</span>
+                <span style={{ color: "#14161a", fontWeight: 500 }}>{tokenInfo.decimals}</span>
               </div>
             </div>
 
+
+          </div>
             {/* Footer */}
             <div
               style={{
-                position: "absolute",
-                bottom: "40px",
-                fontSize: "16px",
-                color: "#9ca3af",
+                fontSize: "18px",
+                color: "#6b727c",
                 display: "flex",
                 alignItems: "center",
-                gap: "8px",
+                gap: "10px",
               }}
             >
               <div
                 style={{
-                  width: "20px",
-                  height: "20px",
-                  borderRadius: "50%",
-                  backgroundColor: "#7c3aed",
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "4px",
+                  backgroundColor: "#f0b429",
                 }}
               />
-              SoroPad • Stellar Soroban
+              SoroPad — token issuance on Stellar
             </div>
-          </div>
         </div>
       ),
       {
@@ -158,9 +146,10 @@ export async function GET(
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#0a0a0a",
-            color: "white",
+            backgroundColor: "#ffffff",
+            color: "#14161a",
             fontFamily: "system-ui, sans-serif",
+            borderTop: "10px solid #f0b429",
           }}
         >
           <h1

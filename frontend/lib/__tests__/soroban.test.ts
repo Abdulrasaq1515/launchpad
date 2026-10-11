@@ -31,6 +31,30 @@ describe("classifyRpcError", () => {
     expect(info.status).toBe(429);
   });
 
+  it("does not read the port out of a connection error as an HTTP status", () => {
+    // 443 is the port on essentially every RPC endpoint, so a bare three-digit
+    // scrape turned every connection failure into a bogus 4xx client error —
+    // which in turn made a valid token render as "Invalid Token Contract".
+    const info = classifyRpcError(new Error("connect ETIMEDOUT 142.251.29.95:443"));
+    expect(info.kind).toBe("timeout");
+    expect(info.status).toBeUndefined();
+
+    const unreachable = classifyRpcError(
+      new Error("connect ENETUNREACH 2a00:1450:4009:c17::5f:443"),
+    );
+    expect(unreachable.kind).toBe("network");
+  });
+
+  it("classifies an AggregateError by its first nested error", () => {
+    // Node raises this when every address for a host fails; its own message is
+    // empty, so classifying it directly always produced "unknown".
+    const agg = new AggregateError(
+      [new Error("connect ETIMEDOUT 142.251.29.95:443")],
+      "",
+    );
+    expect(classifyRpcError(agg).kind).toBe("timeout");
+  });
+
   it("classifies generic 5xx as server error", () => {
     const info = classifyRpcError(new Error("RPC returned 503"));
     expect(info.kind).toBe("server");

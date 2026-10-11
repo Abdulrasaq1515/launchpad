@@ -16,7 +16,7 @@ declare global {
 export const albedoAdapter: WalletAdapter = {
   id: "albedo",
   name: "Albedo",
-  icon: "⭐",
+  icon: "AL",
 
   async isAvailable(): Promise<boolean> {
     return typeof window !== "undefined" && typeof window.albedo !== "undefined";

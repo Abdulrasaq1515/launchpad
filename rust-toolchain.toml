@@ -1,0 +1,7 @@
+# soroban-sdk 27 requires rustc >= 1.91. Pinning the channel keeps CI, the
+# contributor machine, and the build that produced the deployed wasm hashes on
+# the same compiler — a different rustc produces a different hash for identical
+# source, which breaks on-chain contract verification.
+[toolchain]
+channel = "1.98.1"
+targets = ["wasm32v1-none"]

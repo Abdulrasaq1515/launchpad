@@ -172,11 +172,14 @@ describe("i18n message files", () => {
       "recentLaunches.emptyTitle",
       "recentLaunches.emptyDescription",
       "recentLaunches.emptyAction",
-      "recentLaunches.trending",
       "recentLaunches.supply",
       "recentLaunches.contract",
       "recentLaunches.deployed",
-      "recentLaunches.viewDashboard",
+      "recentLaunches.token",
+      "recentLaunches.status",
+      "recentLaunches.active",
+      "recentLaunches.loading",
+      "recentLaunches.retry",
     ];
     for (const key of required) {
       expect(keys).toContain(key);

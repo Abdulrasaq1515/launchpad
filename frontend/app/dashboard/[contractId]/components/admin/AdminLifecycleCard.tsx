@@ -66,7 +66,7 @@ export function TransferAdminCard({
         <Input
           label="New Admin Address"
           placeholder="G..."
-          className="bg-white/5 border-white/10"
+          className="bg-sunken border-line"
           {...form.register("newAdmin")}
           error={form.formState.errors.newAdmin?.message}
           disabled={showConfirm}
@@ -87,7 +87,7 @@ export function TransferAdminCard({
         {!showConfirm ? (
           <Button
             type="submit"
-            className="w-full mt-4 bg-white/5 border-white/10 hover:bg-white/10 text-white"
+            className="w-full mt-4 bg-sunken border-line hover:bg-sunken text-ink"
             disabled={disabled}
           >
             Transfer Control
@@ -105,17 +105,17 @@ export function TransferAdminCard({
         )}
       </form>
 
-      <div className="mt-6 pt-4 border-t border-white/10">
+      <div className="mt-6 pt-4 border-t border-line">
         {!pendingAdmin ? (
           // No two-step transfer in progress — nothing to accept or cancel.
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-xs text-muted text-center">
             No admin transfer is currently pending.
           </p>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-xs text-muted text-center">
               Pending admin →{" "}
-              <span className="font-mono text-stellar-300">
+              <span className="data text-info">
                 {pendingAdmin.slice(0, 6)}…{pendingAdmin.slice(-6)}
               </span>
             </p>
@@ -123,7 +123,7 @@ export function TransferAdminCard({
               // Only the named pending admin can finalize the transfer.
               <Button
                 type="button"
-                className="w-full bg-stellar-600 hover:bg-stellar-700 text-white shadow-lg shadow-stellar-600/20"
+                className="w-full bg-info hover:bg-ink text-ink"
                 onClick={() => onAcceptOrCancel("accept-admin")}
                 isLoading={admin.loading === "accept-admin"}
                 disabled={
@@ -137,7 +137,7 @@ export function TransferAdminCard({
               <Button
                 type="button"
                 variant="secondary"
-                className="w-full border-red-500/20 text-red-400 hover:border-red-500/40"
+                className="w-full border-danger/20 text-danger hover:border-danger/40"
                 onClick={() => onAcceptOrCancel("cancel-admin")}
                 isLoading={admin.loading === "cancel-admin"}
                 disabled={disabled && admin.loading !== "cancel-admin"}
@@ -183,7 +183,7 @@ export function RevokeAdminCard({
       description="Permanently make this token immutable. Removes admin and disables minting, burning, freezing, and admin transfer forever."
     >
       {locked ? (
-        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-4 py-3 text-sm text-yellow-200">
+        <div className="flex items-center gap-2 rounded-lg border border-warn/20 bg-warn-soft px-4 py-3 text-sm text-warn">
           <Lock className="h-4 w-4" aria-hidden="true" />
           Admin already revoked — token is locked.
         </div>
@@ -191,7 +191,7 @@ export function RevokeAdminCard({
         <Button
           type="button"
           variant="secondary"
-          className="w-full mt-2 border-red-500/20 text-red-400 hover:border-red-500/40"
+          className="w-full mt-2 border-danger/20 text-danger hover:border-danger/40"
           disabled={!!admin.loading}
           onClick={() => setShowConfirm(true)}
         >
@@ -204,7 +204,7 @@ export function RevokeAdminCard({
             <>
               Once revoked, no one — including you — can ever mint, burn,
               freeze, or transfer admin again. Type{" "}
-              <span className="font-mono font-bold text-red-300">
+              <span className="data font-bold text-danger">
                 {REVOKE_CONFIRM_PHRASE}
               </span>{" "}
               to confirm.
@@ -227,7 +227,7 @@ export function RevokeAdminCard({
             onChange={(e) => setPhrase(e.target.value)}
             aria-label="Revoke confirmation phrase"
             disabled={admin.loading === "revoke"}
-            className="bg-white/5 border-white/10"
+            className="bg-sunken border-line"
           />
         </ConfirmPanel>
       )}

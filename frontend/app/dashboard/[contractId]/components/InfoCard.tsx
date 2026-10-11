@@ -14,9 +14,9 @@ export function InfoCard({
   isAddress?: boolean;
 }) {
   return (
-    <div className="glass-card flex flex-col gap-1 p-4">
+    <div className="panel flex flex-col gap-1 p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+        <span className="text-xs font-medium text-muted">
           {label}
         </span>
         {!isAddress && copyValue && copyValue !== "N/A" && (
@@ -37,7 +37,7 @@ export function InfoCard({
           className="text-lg font-semibold"
         />
       ) : (
-        <span className="truncate text-lg font-semibold text-white">
+        <span className="truncate text-lg font-semibold text-ink">
           {value}
         </span>
       )}

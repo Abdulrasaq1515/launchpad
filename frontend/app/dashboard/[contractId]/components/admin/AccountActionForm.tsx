@@ -40,6 +40,8 @@ export interface AccountActionSpec {
     message: React.ReactNode;
     confirmLabel: string;
     accent?: ConfirmAccent;
+    /** Require the confirm button to be held. For actions with no way back. */
+    hold?: boolean;
   };
   /** Disable with an explanation, e.g. a non-revocable token. */
   disabledReason?: string;
@@ -123,7 +125,7 @@ export function AccountActionForm({
       <Input
         label={addressLabel}
         placeholder="G..."
-        className="bg-white/5 border-white/10"
+        className="bg-sunken border-line"
         {...form.register("address")}
         error={form.formState.errors.address?.message}
         disabled={disabled || !!pendingConfirm}
@@ -135,6 +137,7 @@ export function AccountActionForm({
           title={pendingConfirm.confirm.title}
           message={pendingConfirm.confirm.message}
           confirmLabel={pendingConfirm.confirm.confirmLabel}
+          hold={pendingConfirm.confirm.hold}
           successLabel={pendingConfirm.successLabel}
           succeeded={admin.success === pendingConfirm.action}
           isLoading={admin.loading === pendingConfirm.action}
@@ -181,7 +184,7 @@ export function AccountActionForm({
           <p
             key={spec.action}
             id={`${spec.action}-disabled-reason`}
-            className="text-[10px] leading-relaxed text-gray-500"
+            className="text-[10px] leading-relaxed text-muted"
           >
             {spec.label} unavailable — {spec.disabledReason}
           </p>
@@ -189,7 +192,7 @@ export function AccountActionForm({
 
       <div aria-live="polite" className="min-h-[1.25rem]">
         {checked && !result && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted">
             Could not read <code>{checkMethod}</code> — the contract may predate
             this getter.
           </p>
@@ -197,10 +200,10 @@ export function AccountActionForm({
         {result && copy && (
           <p
             className={`text-xs ${
-              copy.tone === "positive" ? "text-green-300" : "text-yellow-300"
+              copy.tone === "positive" ? "text-ok" : "text-warn"
             }`}
           >
-            <span className="font-mono">
+            <span className="data">
               {result.address.slice(0, 6)}…{result.address.slice(-6)}
             </span>{" "}
             — {copy.text}

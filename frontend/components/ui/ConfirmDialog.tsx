@@ -79,16 +79,16 @@ export default function ConfirmDialog({
 
   const variantStyles = {
     danger: {
-      icon: "text-red-400",
-      button: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
+      icon: "text-danger",
+      button: "bg-danger hover:bg-red-700 focus:ring-danger",
     },
     warning: {
-      icon: "text-yellow-400",
-      button: "bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
+      icon: "text-warn",
+      button: "bg-warn hover:bg-yellow-700 focus:ring-warn",
     },
     info: {
-      icon: "text-blue-400",
-      button: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
+      icon: "text-info",
+      button: "bg-info hover:bg-blue-700 focus:ring-info",
     },
   };
 
@@ -96,7 +96,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) {
           onCancel();
@@ -109,13 +109,13 @@ export default function ConfirmDialog({
     >
       <div
         ref={dialogRef}
-        className="relative w-full max-w-md rounded-xl border border-white/10 bg-void-900 p-6 shadow-2xl animate-scale-in"
+        className="relative w-full max-w-md rounded-xl border border-line bg-sunken p-6 animate-scale-in"
       >
         {/* Close button */}
         <button
           onClick={onCancel}
           disabled={loading}
-          className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+          className="absolute right-4 top-4 rounded-lg p-1 text-muted transition-colors hover:bg-sunken hover:text-ink disabled:opacity-40"
           aria-label="Close dialog"
         >
           <X className="h-5 w-5" />
@@ -123,10 +123,10 @@ export default function ConfirmDialog({
 
         {/* Icon */}
         <div className="mb-4 flex items-center gap-3">
-          <div className={`rounded-full bg-white/5 p-2 ${styles.icon}`}>
+          <div className={`rounded-full bg-sunken p-2 ${styles.icon}`}>
             <AlertTriangle className="h-6 w-6" />
           </div>
-          <h2 id="dialog-title" className="text-xl font-semibold text-white">
+          <h2 id="dialog-title" className="text-xl font-semibold text-ink">
             {title}
           </h2>
         </div>
@@ -134,7 +134,7 @@ export default function ConfirmDialog({
         {/* Message */}
         <p
           id="dialog-description"
-          className="mb-6 text-sm leading-relaxed text-gray-300"
+          className="mb-6 text-sm leading-relaxed text-body"
         >
           {message}
         </p>
@@ -144,14 +144,14 @@ export default function ConfirmDialog({
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:opacity-40"
+            className="flex-1 rounded-lg border border-line bg-sunken px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-sunken disabled:opacity-40"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-void-900 disabled:opacity-40 ${styles.button}`}
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium text-ink transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-void-900 disabled:opacity-40 ${styles.button}`}
           >
             {loading ? "Processing..." : confirmLabel}
           </button>

@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { Trash2 } from "lucide-react";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Button } from "@/components/ui/Button";
@@ -22,82 +21,60 @@ interface AllowanceCardProps {
 }
 
 /**
- * AllowanceCard - Display a single allowance grant
+ * One allowance, as a row.
+ *
+ * An allowance is a standing permission to spend your tokens, so the row leads
+ * with who holds it and how much, and states plainly whether it is still live.
+ * An expired allowance is shown rather than hidden — it is the difference
+ * between "this was revoked" and "this lapsed", which matters when auditing.
  */
-export function AllowanceCard({
-  allowance,
-  onRevoke,
-  isRevoking,
-}: AllowanceCardProps) {
-  const expiresDate = allowance.expiresAt?.toLocaleDateString() || undefined;
-  const expiresTime = allowance.expiresAt?.toLocaleTimeString() || undefined;
-  const displayExpiration = expiresDate
-    ? `${expiresDate}${expiresTime ? ` ${expiresTime}` : ""}`
+export function AllowanceCard({ allowance, onRevoke, isRevoking }: AllowanceCardProps) {
+  const expiry = allowance.expiresAt
+    ? allowance.expiresAt.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
     : allowance.expirationLedger
       ? `Ledger ${allowance.expirationLedger.toLocaleString()}`
-      : "N/A";
+      : "—";
 
   return (
-    <div
-      className={`glass-card p-4 ${allowance.isExpired ? "opacity-60" : ""} border border-white/10`}
-    >
-      <div className="space-y-3">
-        {/* Spender Address */}
-        <div>
-          <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
-            Spender
-          </p>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-sm text-white">
-              {truncateAddress(allowance.spenderAddress, 12)}
-            </span>
-            <CopyButton
-              value={allowance.spenderAddress}
-              label="Copy spender address"
-            />
-          </div>
-        </div>
-
-        {/* Amount */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
-              Allowance
-            </p>
-            <p className="text-lg font-semibold text-stellar-400">
-              {allowance.amountFormatted}
-            </p>
-          </div>
-
-          {/* Expiration */}
-          <div>
-            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
-              Expires
-            </p>
-            <div className="flex flex-col">
-              <p className="text-sm text-white">{displayExpiration}</p>
-              {allowance.isExpired && (
-                <p className="text-xs text-red-400 font-medium">Expired</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Revoke Button */}
-        {onRevoke && !allowance.isExpired && (
-          <div className="pt-2">
-            <Button
-              onClick={() => onRevoke(allowance.spenderAddress)}
-              disabled={isRevoking}
-              variant="secondary"
-              className="w-full flex items-center justify-center gap-2 text-red-400 hover:bg-red-600/20"
-            >
-              <Trash2 className="h-4 w-4" />
-              {isRevoking ? "Revoking..." : "Revoke Allowance"}
-            </Button>
-          </div>
-        )}
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors duration-[120ms] hover:bg-sunken">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="data truncate text-sm text-ink" title={allowance.spenderAddress}>
+          {truncateAddress(allowance.spenderAddress)}
+        </span>
+        <CopyButton value={allowance.spenderAddress} label="Copy spender address" />
       </div>
-    </div>
+
+      <div className="data text-sm text-ink">{allowance.amountFormatted}</div>
+
+      <div className="flex min-w-[8rem] items-center gap-2">
+        {allowance.isExpired ? (
+          <span className="tag tag-neutral">Expired</span>
+        ) : (
+          <span className="tag tag-ok">
+            <span className="dot" aria-hidden />
+            Active
+          </span>
+        )}
+        <span className="text-[0.75rem] text-muted">{expiry}</span>
+      </div>
+
+      {onRevoke && !allowance.isExpired && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onRevoke(allowance.spenderAddress)}
+          isLoading={isRevoking}
+          className="text-danger hover:bg-danger-soft"
+          aria-label={`Revoke allowance for ${allowance.spenderAddress}`}
+        >
+          {!isRevoking && <Trash2 className="h-3.5 w-3.5" aria-hidden />}
+          Revoke
+        </Button>
+      )}
+    </li>
   );
 }

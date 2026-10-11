@@ -27,7 +27,7 @@ export function WalletButton() {
       <div className="flex items-center gap-2">
         {/* Truncated address badge */}
         <span
-          className="rounded-lg border border-stellar-500/20 bg-stellar-500/10 px-3 py-1.5 font-mono text-xs text-stellar-300 flex items-center gap-2"
+          className="flex items-center gap-1.5 rounded-[7px] border border-line bg-panel px-2.5 py-1.5 data text-xs text-body"
           title={publicKey}
         >
           {truncateAddress(publicKey)}
@@ -37,7 +37,7 @@ export function WalletButton() {
         {/* Disconnect button */}
         <button
           onClick={disconnect}
-          className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-red-500/30 hover:text-red-400"
+          className="rounded-[7px] px-2 py-1.5 text-xs text-muted transition-colors duration-[120ms] hover:bg-sunken hover:text-danger"
         >
           {t("disconnect")}
         </button>
@@ -49,7 +49,7 @@ export function WalletButton() {
     <button
       onClick={connect}
       disabled={loading}
-      className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-60"
+      className="btn btn-primary"
     >
       {loading ? t("connectingEllipsis") : t("connect")}
     </button>

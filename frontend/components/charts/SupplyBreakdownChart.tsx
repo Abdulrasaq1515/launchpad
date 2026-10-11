@@ -58,12 +58,12 @@ function CustomTooltip({
 
   if (data.unavailable) {
     return (
-      <div className="rounded-lg border border-white/10 bg-void-900/95 p-3 shadow-xl backdrop-blur-sm">
-        <p className="mb-2 text-sm font-semibold text-white">{data.name}</p>
+      <div className="rounded-lg border border-line bg-sunken/95 p-3">
+        <p className="mb-2 text-sm font-semibold text-ink">{data.name}</p>
         <div className="space-y-1 text-xs">
-          <p className="text-gray-400">
+          <p className="text-muted">
             Burn data unavailable — this contract does not expose{" "}
-            <span className="font-mono text-gray-300">total_burned</span>
+            <span className="data text-body">total_burned</span>
           </p>
         </div>
       </div>
@@ -71,18 +71,18 @@ function CustomTooltip({
   }
 
   return (
-    <div className="rounded-lg border border-white/10 bg-void-900/95 p-3 shadow-xl backdrop-blur-sm">
-      <p className="mb-2 text-sm font-semibold text-white">{data.name}</p>
+    <div className="rounded-lg border border-line bg-sunken/95 p-3">
+      <p className="mb-2 text-sm font-semibold text-ink">{data.name}</p>
       <div className="space-y-1 text-xs">
-        <p className="text-gray-300">
+        <p className="text-body">
           Amount:{" "}
-          <span className="font-mono text-white">
+          <span className="data text-ink">
             {formatNumber(data.value)}
           </span>
         </p>
-        <p className="text-gray-300">
+        <p className="text-body">
           Percentage:{" "}
-          <span className="font-mono text-stellar-400">
+          <span className="data text-info">
             {data.percentage.toFixed(2)}%
           </span>
         </p>
@@ -117,7 +117,7 @@ function CustomLegend({
       {data.map((entry, index) => (
         <div
           key={`legend-${index}`}
-          className={`glass-card flex items-center gap-3 p-3 transition-all hover:border-stellar-400/30 ${
+          className={`panel flex items-center gap-3 p-3 transition-all hover:border-info/30 ${
             entry.unavailable ? "opacity-60" : ""
           }`}
         >
@@ -128,11 +128,11 @@ function CustomLegend({
             {icons[entry.name as keyof typeof icons]}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-400">
+            <p className="text-xs font-medium text-muted">
               {entry.unavailable ? (
                 <span className="flex items-center gap-1">
                   Total Burned
-                  <span className="inline-flex items-center rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">
+                  <span className="inline-flex items-center rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] font-medium text-muted">
                     unavailable
                   </span>
                 </span>
@@ -140,10 +140,10 @@ function CustomLegend({
                 entry.name
               )}
             </p>
-            <p className="truncate font-mono text-sm font-semibold text-white">
+            <p className="truncate data text-sm font-semibold text-ink">
               {entry.unavailable ? "—" : formatNumber(entry.value)}
             </p>
-            <p className="text-xs text-stellar-400">
+            <p className="text-xs text-info">
               {entry.unavailable ? "—" : `${entry.percentage.toFixed(2)}%`}
             </p>
           </div>
@@ -228,17 +228,17 @@ export default function SupplyBreakdownChart({
   const totalSupply = data.circulating + data.locked + data.burned;
 
   return (
-    <div className="glass-card p-6">
+    <div className="panel p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Supply Breakdown</h3>
-          <p className="mt-1 text-sm text-gray-400">
+          <h3 className="text-lg font-semibold text-ink">Supply Breakdown</h3>
+          <p className="mt-1 text-sm text-muted">
             Distribution of {symbol} tokens across different categories
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg bg-stellar-500/10 px-3 py-2">
-          <Coins className="h-4 w-4 text-stellar-400" />
-          <span className="text-xs font-medium text-stellar-300">
+        <div className="flex items-center gap-2 rounded-lg bg-info-soft px-3 py-2">
+          <Coins className="h-4 w-4 text-info" />
+          <span className="text-xs font-medium text-info">
             Total Supply
           </span>
         </div>
@@ -274,13 +274,13 @@ export default function SupplyBreakdownChart({
 
         {/* Center label */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+          <p className="text-xs font-medium text-muted">
             Total
           </p>
-          <p className="mt-1 font-mono text-2xl font-bold text-white">
+          <p className="mt-1 data text-2xl font-bold text-ink">
             {formatNumber(totalSupply)}
           </p>
-          <p className="mt-0.5 text-xs text-gray-400">{symbol}</p>
+          <p className="mt-0.5 text-xs text-muted">{symbol}</p>
         </div>
       </div>
 
@@ -288,17 +288,17 @@ export default function SupplyBreakdownChart({
       <CustomLegend data={chartData} />
 
       {/* Additional info */}
-      <div className="mt-6 rounded-lg border border-white/5 bg-white/2 p-4">
+      <div className="mt-6 rounded-lg border border-line/5 bg-white/2 p-4">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-gray-500">Circulating %</p>
-            <p className="mt-1 font-mono font-semibold text-white">
+            <p className="text-muted">Circulating %</p>
+            <p className="mt-1 data font-semibold text-ink">
               {((data.circulating / totalSupply) * 100).toFixed(2)}%
             </p>
           </div>
           <div>
-            <p className="text-gray-500">Locked %</p>
-            <p className="mt-1 font-mono font-semibold text-white">
+            <p className="text-muted">Locked %</p>
+            <p className="mt-1 data font-semibold text-ink">
               {((data.locked / totalSupply) * 100).toFixed(2)}%
             </p>
           </div>

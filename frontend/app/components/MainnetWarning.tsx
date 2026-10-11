@@ -13,7 +13,7 @@ export function MainnetWarning() {
   }
 
   return (
-    <div className="bg-amber-500/10 border-b border-amber-500/20 py-2 px-4 flex items-center justify-center gap-2 text-amber-500 text-xs font-medium sticky top-16 z-40 backdrop-blur-md">
+    <div className="bg-warn-soft border-b border-warn/20 py-2 px-4 flex items-center justify-center gap-2 text-warn text-xs font-medium sticky top-16 z-40">
       <AlertTriangle className="size-3.5" />
       <span>
         {t("message", { network: networkConfig.network })}

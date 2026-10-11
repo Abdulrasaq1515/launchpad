@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { AlertTriangle } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -88,15 +89,15 @@ export function VestingCurveChart({ cliffDays, durationDays }: VestingCurveChart
   const tickFormatter = (day: number) => formatDate(addDays(today, day));
 
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-3">
-      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+    <div className="rounded-xl bg-sunken border border-line p-4 space-y-3">
+      <p className="text-xs font-medium text-muted">
         Unlock Schedule Preview
       </p>
 
       {cliffTooFar && (
-        <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-          <span className="text-amber-400 text-sm leading-none mt-0.5">⚠</span>
-          <p className="text-xs text-amber-300">
+        <div className="flex items-start gap-2 rounded-lg bg-warn-soft border border-warn/20 px-3 py-2">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none text-warn" aria-hidden />
+          <p className="text-xs text-warn">
             Cliff is set more than 2 years in the future ({cliffDays} days).
             Verify this is intentional before proceeding.
           </p>
@@ -183,18 +184,18 @@ export function VestingCurveChart({ cliffDays, durationDays }: VestingCurveChart
 
       {/* Legend */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center">
-        <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+        <span className="flex items-center gap-1.5 text-[10px] text-muted">
           <span className="inline-block w-3 h-px bg-gray-500" />
           Today
         </span>
         {cliffDays > 0 && (
-          <span className="flex items-center gap-1.5 text-[10px] text-amber-500">
-            <span className="inline-block w-3 h-px bg-amber-400" />
+          <span className="flex items-center gap-1.5 text-[10px] text-warn">
+            <span className="inline-block w-3 h-px bg-warn" />
             Cliff · {cliffDate}
           </span>
         )}
-        <span className="flex items-center gap-1.5 text-[10px] text-green-500">
-          <span className="inline-block w-3 h-px bg-green-400" />
+        <span className="flex items-center gap-1.5 text-[10px] text-ok">
+          <span className="inline-block w-3 h-px bg-ok" />
           Full Unlock · {endDate}
         </span>
       </div>

@@ -141,8 +141,8 @@ export function TransferFromForm({ onSuccess, onError }: TransferFromFormProps) 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-white mb-4">Transfer From Allowance</h2>
-        <p className="text-sm text-gray-400 mb-6">
+        <h2 className="text-xl font-semibold text-ink mb-4">Transfer From Allowance</h2>
+        <p className="text-sm text-muted mb-6">
           Transfer tokens on behalf of another address if you have their allowance.
         </p>
       </div>
@@ -152,7 +152,7 @@ export function TransferFromForm({ onSuccess, onError }: TransferFromFormProps) 
           label="Token Contract ID"
           {...register("tokenContractId")}
           placeholder="C..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.tokenContractId?.message}
         />
 
@@ -160,7 +160,7 @@ export function TransferFromForm({ onSuccess, onError }: TransferFromFormProps) 
           label="Source Address (who gave you allowance)"
           {...register("fromAddress")}
           placeholder="G..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.fromAddress?.message}
         />
 
@@ -168,7 +168,7 @@ export function TransferFromForm({ onSuccess, onError }: TransferFromFormProps) 
           label="Recipient Address"
           {...register("toAddress")}
           placeholder="G..."
-          className="font-mono text-sm"
+          className="data text-sm"
           error={errors.toAddress?.message}
         />
 
@@ -191,11 +191,11 @@ export function TransferFromForm({ onSuccess, onError }: TransferFromFormProps) 
       )}
 
       {txHash && (
-        <div className="flex items-center gap-3 p-4 bg-green-600/10 border border-green-600/50 rounded-lg">
-          <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
+        <div className="flex items-center gap-3 p-4 bg-ok-soft border border-ok/50 rounded-lg">
+          <CheckCircle className="h-5 w-5 text-ok flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-green-400">Transfer successful!</p>
-            <p className="text-xs text-green-300">TX: {txHash}</p>
+            <p className="text-sm font-medium text-ok">Transfer successful!</p>
+            <p className="text-xs text-ok">TX: {txHash}</p>
           </div>
         </div>
       )}

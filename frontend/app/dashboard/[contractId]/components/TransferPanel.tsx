@@ -25,7 +25,8 @@ import {
 } from "@stellar/stellar-sdk";
 import { getTokenActionBlockedReason } from "@/components/TokenStatusBanner";
 import type { TokenInfo, WalletTokenState } from "@/lib/stellar";
-import { toBaseUnits } from "@/lib/utils";
+import { toBaseUnits, fromBaseUnits } from "@/lib/utils";
+import { scValToNative } from "@/lib/soroban";
 
 const buildTransferSchema = (decimals: number) =>
   z.object({
@@ -46,7 +47,7 @@ const buildTransferSchema = (decimals: number) =>
       ),
   });
 
-type TransferData = z.infer<typeof transferSchema>;
+type TransferData = z.infer<ReturnType<typeof buildTransferSchema>>;
 
 function i128ToScVal(value: bigint): xdr.ScVal {
   const isNegative = value < BigInt(0);
@@ -106,19 +107,12 @@ export function TransferPanel({
         .setTimeout(30).build();
       const sim = await rpc.simulateTransaction(tx);
       if ((await import("@stellar/stellar-sdk")).rpc.Api.isSimulationSuccess(sim) && sim.result) {
-        const balanceScVal = sim.result.retval;
-        const parts = balanceScVal.i128();
-        const hi = BigInt(parts.hi().toString());
-        const lo = BigInt(parts.lo().toString());
-        const rawBalance = (hi << BigInt(64)) + lo;
-        const divisor = BigInt(10) ** BigInt(tokenDecimals);
-        const whole = rawBalance / divisor;
-        const frac = rawBalance % divisor;
-        if (frac === BigInt(0)) setUserBalance(whole.toString());
-        else {
-          const fracStr = frac.toString().padStart(tokenDecimals, "0").replace(/0+$/, "");
-          setUserBalance(`${whole}.${fracStr}`);
-        }
+        // Decode and scale through the shared helpers. The hand-rolled
+        // (hi << 64n) + lo reassembly this replaces ignored the sign of the
+        // low word, and its own 10 ** decimals division was a fourth copy of
+        // the scaling logic fromBaseUnits already owns.
+        const rawBalance = scValToNative(sim.result.retval) as bigint;
+        setUserBalance(fromBaseUnits(rawBalance, tokenDecimals));
       } else setUserBalance("0");
     } catch (err) {
       console.error("Failed to fetch balance:", err);
@@ -181,10 +175,10 @@ export function TransferPanel({
   if (!connected || !publicKey) {
     return (
       <section className="mt-8 w-full max-w-4xl">
-        <div className="glass-card p-8 text-center">
-          <Wallet className="mx-auto h-12 w-12 text-gray-500 mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">{tTransfer("connectTitle")}</h3>
-          <p className="text-sm text-gray-400">{tTransfer("connectDescription", { symbol: tokenSymbol })}</p>
+        <div className="panel p-8 text-center">
+          <Wallet className="mx-auto h-12 w-12 text-muted mb-4" />
+          <h3 className="text-lg font-semibold text-ink mb-2">{tTransfer("connectTitle")}</h3>
+          <p className="text-sm text-muted">{tTransfer("connectDescription", { symbol: tokenSymbol })}</p>
         </div>
       </section>
     );
@@ -193,10 +187,10 @@ export function TransferPanel({
   if (userBalance === "0" || userBalance === "0.0") {
     return (
       <section className="mt-8 w-full max-w-4xl">
-        <div className="glass-card p-8 text-center">
-          <AlertCircle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">{tTransfer("noBalanceTitle")}</h3>
-          <p className="text-sm text-gray-400">{tTransfer("noBalanceDescription", { symbol: tokenSymbol })}</p>
+        <div className="panel p-8 text-center">
+          <AlertCircle className="mx-auto h-12 w-12 text-warn mb-4" />
+          <h3 className="text-lg font-semibold text-ink mb-2">{tTransfer("noBalanceTitle")}</h3>
+          <p className="text-sm text-muted">{tTransfer("noBalanceDescription", { symbol: tokenSymbol })}</p>
         </div>
       </section>
     );
@@ -206,60 +200,60 @@ export function TransferPanel({
     <section className="mt-8 w-full max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <ArrowRight className="w-6 h-6 text-stellar-400" />
-          <h2 className="text-2xl font-bold text-white tracking-tight">{tTransfer("title")}</h2>
+          <ArrowRight className="w-6 h-6 text-info" />
+          <h2 className="text-2xl font-bold text-ink tracking-tight">{tTransfer("title")}</h2>
         </div>
         {lastTxHash && (
           <a href={`https://stellar.expert/explorer/${networkConfig.network}/tx/${lastTxHash}`} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-stellar-400 hover:text-stellar-300 transition-colors bg-stellar-400/10 px-3 py-1.5 rounded-full border border-stellar-400/20">
+            className="flex items-center gap-1.5 text-xs text-info hover:text-info transition-colors bg-info-soft px-3 py-1.5 rounded-full border border-info/20">
             {tTransfer("lastTx", { hash: lastTxHash.slice(0, 8) })}<ExternalLink className="w-3 h-3" />
           </a>
         )}
       </div>
 
-      <div className="glass-card p-6 hover:border-stellar-500/30 transition-all duration-300">
-        <div className="mb-6 p-4 bg-stellar-500/10 rounded-lg border border-stellar-500/20">
+      <div className="panel p-6 hover:border-info/30 transition-all duration-300">
+        <div className="mb-6 p-4 bg-info-soft rounded-lg border border-info/20">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">{tTransfer("yourBalance")}</span>
+            <span className="text-sm text-muted">{tTransfer("yourBalance")}</span>
             {checkingBalance ? (
-              <Loader2 className="h-4 w-4 animate-spin text-stellar-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-info" />
             ) : (
-              <span className="text-lg font-bold text-white">{userBalance || "..."} {tokenSymbol}</span>
+              <span className="text-lg font-bold text-ink">{userBalance || "..."} {tokenSymbol}</span>
             )}
           </div>
         </div>
 
         <form onSubmit={form.handleSubmit(handleTransfer)} className="space-y-4">
-          <Input label={tTransfer("recipientLabel")} placeholder={tTransfer("recipientPlaceholder")} className="bg-white/5 border-white/10"
+          <Input label={tTransfer("recipientLabel")} placeholder={tTransfer("recipientPlaceholder")} className="bg-sunken border-line"
             {...form.register("to")} error={form.formState.errors.to?.message} disabled={loading} />
           <Input label={tTransfer("amountLabel", { symbol: tokenSymbol })} type="number" step="any"
-            placeholder={tTransfer("amountPlaceholder")} className="bg-white/5 border-white/10"
+            placeholder={tTransfer("amountPlaceholder")} className="bg-sunken border-line"
             {...form.register("amount")} error={form.formState.errors.amount?.message} disabled={loading} />
 
           {blockedReason && !error && (
-            <div className="flex items-start gap-2 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-orange-400 mt-0.5 shrink-0" /><p className="text-sm text-orange-300">{blockedReason}</p>
+            <div className="flex items-start gap-2 p-3 bg-warn-soft border border-warn/20 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-warn mt-0.5 shrink-0" /><p className="text-sm text-warn">{blockedReason}</p>
             </div>
           )}
           {error && (
-            <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" /><p className="text-sm text-red-400">{error}</p>
+            <div className="flex items-start gap-2 p-3 bg-danger-soft border border-danger/20 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-danger mt-0.5 shrink-0" /><p className="text-sm text-danger">{error}</p>
             </div>
           )}
           {success && (
-            <div className="flex items-start gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <CheckCircle2 className="h-4 w-4 text-green-400 mt-0.5 shrink-0" /><p className="text-sm text-green-400">{tTransfer("transferSuccessful")}</p>
+            <div className="flex items-start gap-2 p-3 bg-ok-soft border border-ok/20 rounded-lg">
+              <CheckCircle2 className="h-4 w-4 text-ok mt-0.5 shrink-0" /><p className="text-sm text-ok">{tTransfer("transferSuccessful")}</p>
             </div>
           )}
 
-          <Button type="submit" className="w-full mt-4 shadow-lg shadow-stellar-500/20" isLoading={loading} disabled={loading || checkingBalance || !!blockedReason}>
+          <Button type="submit" className="w-full mt-4" isLoading={loading} disabled={loading || checkingBalance || !!blockedReason}>
             {success ? (
               <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> {tTransfer("transferComplete")}</span>
             ) : tTransfer("transferTokens")}
           </Button>
         </form>
 
-        <p className="mt-4 text-xs text-gray-500 text-center">{tTransfer("networkNote", { network: networkConfig.network })}</p>
+        <p className="mt-4 text-xs text-muted text-center">{tTransfer("networkNote", { network: networkConfig.network })}</p>
       </div>
     </section>
   );

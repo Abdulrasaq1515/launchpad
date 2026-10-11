@@ -94,11 +94,11 @@ export function OutgoingAllowancesSection({ onRefresh }: OutgoingAllowancesSecti
     <section aria-label={t("outgoingAllowances")} className="mb-10">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 flex items-center gap-2">
+          <h2 className="text-sm font-medium text-muted flex items-center gap-2">
             <Shield className="w-4 h-4" />
             {t("outgoingAllowances")}
           </h2>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-muted mt-1">
             {t("outgoingAllowancesDesc")}
           </p>
         </div>
@@ -110,9 +110,9 @@ export function OutgoingAllowancesSection({ onRefresh }: OutgoingAllowancesSecti
         )}
       </div>
 
-      <div className="glass-card p-6 space-y-4">
+      <div className="panel p-6 space-y-4">
         <div>
-          <label className="text-xs font-medium text-gray-400 uppercase mb-2 block">
+          <label className="text-xs font-medium text-muted uppercase mb-2 block">
             {t("allowanceContractLabel")}
           </label>
           <div className="flex gap-2">
@@ -120,7 +120,7 @@ export function OutgoingAllowancesSection({ onRefresh }: OutgoingAllowancesSecti
               value={tokenContractId}
               onChange={(e) => setTokenContractId(e.target.value)}
               placeholder={t("allowanceContractPlaceholder")}
-              className="flex-1 font-mono text-sm bg-void-900 border-white/10"
+              className="flex-1 data text-sm bg-sunken border-line"
             />
             <Button onClick={loadAllowances} disabled={loading || !tokenContractId.trim()} isLoading={loading} className="px-4">
               {t("loadAllowances")}
@@ -129,7 +129,7 @@ export function OutgoingAllowancesSection({ onRefresh }: OutgoingAllowancesSecti
         </div>
 
         {error && (
-          <div className="p-3 bg-red-400/10 border border-red-400/20 rounded-lg flex items-center gap-2 text-red-400 text-xs">
+          <div className="p-3 bg-danger-soft border border-danger/20 rounded-lg flex items-center gap-2 text-danger text-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -138,8 +138,8 @@ export function OutgoingAllowancesSection({ onRefresh }: OutgoingAllowancesSecti
         {loading && (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
-              <div className="animate-spin h-8 w-8 border-2 border-stellar-400 border-t-transparent rounded-full mx-auto mb-2" />
-              <p className="text-sm text-gray-400">{t("loadingAllowances")}</p>
+              <div className="animate-spin h-8 w-8 border-2 border-info border-t-transparent rounded-full mx-auto mb-2" />
+              <p className="text-sm text-muted">{t("loadingAllowances")}</p>
             </div>
           </div>
         )}
@@ -151,27 +151,27 @@ export function OutgoingAllowancesSection({ onRefresh }: OutgoingAllowancesSecti
         {!loading && allowances.length > 0 && (
           <div className="space-y-2">
             {allowances.map((allowance) => (
-              <div key={`${allowance.tokenContractId}-${allowance.spenderAddress}`} className="glass-card p-4 flex items-center justify-between gap-4 hover:border-stellar-400/20 transition-all">
+              <div key={`${allowance.tokenContractId}-${allowance.spenderAddress}`} className="panel p-4 flex items-center justify-between gap-4 hover:border-info/20 transition-all">
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-400 uppercase">{t("spenderLabel")}</span>
-                    <code className="text-sm font-mono bg-black/20 px-2 py-0.5 rounded text-gray-300">{truncateAddress(allowance.spenderAddress, 6)}</code>
+                    <span className="text-xs font-bold text-muted uppercase">{t("spenderLabel")}</span>
+                    <code className="text-sm data bg-black/20 px-2 py-0.5 rounded text-body">{truncateAddress(allowance.spenderAddress, 6)}</code>
                   </div>
                   <div className="flex items-center gap-4">
                     <div>
-                      <span className="text-xs text-gray-400">{t("amountLabel")}</span>
-                      <p className="text-sm font-semibold text-white">{allowance.amount} {allowance.tokenSymbol}</p>
+                      <span className="text-xs text-muted">{t("amountLabel")}</span>
+                      <p className="text-sm font-semibold text-ink">{allowance.amount} {allowance.tokenSymbol}</p>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-400">{t("statusLabel")}</span>
-                      <p className={`text-sm font-medium ${allowance.isExpired ? "text-red-400" : "text-green-400"}`}>
+                      <span className="text-xs text-muted">{t("statusLabel")}</span>
+                      <p className={`text-sm font-medium ${allowance.isExpired ? "text-danger" : "text-ok"}`}>
                         {allowance.isExpired ? t("expired") : t("active")}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <Button onClick={() => handleRevoke(allowance.spenderAddress)} disabled={revokingSpender === allowance.spenderAddress || allowance.isExpired} isLoading={revokingSpender === allowance.spenderAddress} className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-all shrink-0">
+                <Button onClick={() => handleRevoke(allowance.spenderAddress)} disabled={revokingSpender === allowance.spenderAddress || allowance.isExpired} isLoading={revokingSpender === allowance.spenderAddress} className="bg-danger-soft hover:bg-danger-soft border border-danger/30 text-danger transition-all shrink-0">
                   <Trash2 className="w-4 h-4 mr-1" />
                   {t("revoke")}
                 </Button>

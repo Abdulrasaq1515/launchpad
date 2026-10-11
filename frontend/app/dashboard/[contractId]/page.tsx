@@ -25,7 +25,7 @@ export async function generateMetadata({
 export default async function TokenDashboardPage({ params }: PageProps) {
   const { contractId } = await params;
 
-  // 🚨 early guard (prevents obvious invalid contract crashes)
+  // Early guard, before any RPC work: an invalid ID cannot resolve to a token.
   if (!isValidContractId(contractId)) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
@@ -33,11 +33,11 @@ export default async function TokenDashboardPage({ params }: PageProps) {
           Invalid contract ID
         </h2>
 
-        <p className="text-gray-500 mt-2">
+        <p className="text-muted mt-2">
           The contract ID provided is not valid.
         </p>
 
-        <Link href="/dashboard" className="mt-4 text-blue-500 underline">
+        <Link href="/dashboard" className="mt-4 text-info underline">
           Back to search
         </Link>
       </div>

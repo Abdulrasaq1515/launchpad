@@ -67,7 +67,7 @@ pub enum DataKey {
 /// can enumerate and filter without fetching every document: `symbol` in
 /// the clear, `name_digest` / `metadata_digest` as keccak256 commitments,
 /// plus the launch facts (`creator`, `launch_ledger`, `initial_supply`).
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 #[contracttype]
 pub struct MetadataRecord {
     pub symbol: String,
@@ -120,6 +120,7 @@ pub enum RegistryError {
 #[contract]
 pub struct MetadataRegistryContract;
 
+#[allow(deprecated)]
 #[contractimpl]
 impl MetadataRegistryContract {
     /// Initialize the registry.
@@ -160,16 +161,16 @@ impl MetadataRegistryContract {
     ) {
         Self::_require_factory(&env);
 
-        if symbol.len() == 0 || symbol.len() > MAX_SYMBOL_LEN {
+        if symbol.is_empty() || symbol.len() > MAX_SYMBOL_LEN {
             panic_with_error!(&env, RegistryError::InvalidMetadata);
         }
-        if name.len() == 0 || name.len() > MAX_NAME_LEN {
+        if name.is_empty() || name.len() > MAX_NAME_LEN {
             panic_with_error!(&env, RegistryError::InvalidMetadata);
         }
 
         let metadata_digest = match metadata {
             Some(json) => {
-                if json.len() == 0 || json.len() > MAX_METADATA_LEN {
+                if json.is_empty() || json.len() > MAX_METADATA_LEN {
                     panic_with_error!(&env, RegistryError::InvalidMetadata);
                 }
                 Some(Self::_keccak_string(&env, &json, MAX_METADATA_LEN))
@@ -402,7 +403,7 @@ mod test {
         Address,
         Address,
     ) {
-        let contract_id = env.register_contract(None, MetadataRegistryContract);
+        let contract_id = env.register(MetadataRegistryContract, ());
         let client = MetadataRegistryContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
         let factory = Address::generate(env);
@@ -416,6 +417,7 @@ mod test {
             .into()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn register_as_factory(
         env: &Env,
         contract_id: &Address,
@@ -486,6 +488,8 @@ mod test {
             Some(json),
         );
 
+        let events = env.events().all();
+
         let record = client.get_record(&token).unwrap();
         assert_eq!(record.symbol, String::from_str(&env, "FTK"));
         assert_eq!(record.name_digest, keccak(&env, "Factory Token"));
@@ -495,10 +499,8 @@ mod test {
         assert_eq!(record.metadata_digest, Some(keccak(&env, json)));
         assert_eq!(client.get_record_count(), 1);
 
-        let events = env.events().all();
-        let last = events.slice(events.len() - 1..);
         assert_eq!(
-            last,
+            events,
             soroban_sdk::vec![
                 &env,
                 (

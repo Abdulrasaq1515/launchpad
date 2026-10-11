@@ -25,10 +25,10 @@ interface ToggleProps {
 const Toggle = ({ id, label, description, checked, onChange, disabled }: ToggleProps) => (
     <div className="flex items-start justify-between gap-4 py-3">
         <div className="flex-1">
-            <label htmlFor={id} className="text-sm font-medium text-gray-200 cursor-pointer">
+            <label htmlFor={id} className="text-sm font-medium text-ink cursor-pointer">
                 {label}
             </label>
-            <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+            <p className="text-xs text-muted mt-0.5">{description}</p>
         </div>
         <button
             type="button"
@@ -39,14 +39,14 @@ const Toggle = ({ id, label, description, checked, onChange, disabled }: ToggleP
             onClick={() => onChange(!checked)}
             className={`
                 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
-                transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-stellar-500/40
-                ${checked ? "bg-stellar-500" : "bg-void-700"}
+                transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-info/40
+                ${checked ? "bg-info" : "bg-sunken"}
                 ${disabled ? "opacity-40 cursor-not-allowed" : ""}
             `}
         >
             <span
                 className={`
-                    pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                    pointer-events-none inline-block h-5 w-5 transform rounded-full bg-panel shadow ring-0
                     transition duration-200 ease-in-out
                     ${checked ? "translate-x-5" : "translate-x-0"}
                 `}
@@ -84,10 +84,10 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in-up">
+        <div className="space-y-6">
             <div className="text-left">
-                <h2 className="text-xl font-bold text-white mb-2">Administration</h2>
-                <p className="text-sm text-gray-400">
+                <h2 className="text-xl font-bold text-ink mb-2">Administration</h2>
+                <p className="text-sm text-muted">
                     Specify who controls the token and whether a compliance node should gate transfers.
                 </p>
             </div>
@@ -100,15 +100,15 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
                     className={`
                         flex items-start gap-3 rounded-xl border p-4 text-left transition-colors
                         ${adminMode === "wallet"
-                            ? "border-stellar-500/40 bg-stellar-500/10"
-                            : "border-white/10 bg-void-800/40 hover:bg-void-800/60"}
+                            ? "border-info/40 bg-info-soft"
+                            : "border-line bg-sunken/40 hover:bg-sunken/60"}
                         ${!publicKey ? "cursor-not-allowed opacity-50" : ""}
                     `}
                 >
-                    <Wallet className="mt-0.5 h-5 w-5 text-stellar-400" />
+                    <Wallet className="mt-0.5 h-5 w-5 text-info" />
                     <div>
-                        <div className="text-sm font-medium text-white">Connected Wallet</div>
-                        <p className="text-xs text-gray-500">
+                        <div className="text-sm font-medium text-ink">Connected Wallet</div>
+                        <p className="text-xs text-muted">
                             Assign admin rights to the wallet currently connected in Freighter.
                         </p>
                     </div>
@@ -120,14 +120,14 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
                     className={`
                         flex items-start gap-3 rounded-xl border p-4 text-left transition-colors
                         ${adminMode === "custom"
-                            ? "border-stellar-500/40 bg-stellar-500/10"
-                            : "border-white/10 bg-void-800/40 hover:bg-void-800/60"}
+                            ? "border-info/40 bg-info-soft"
+                            : "border-line bg-sunken/40 hover:bg-sunken/60"}
                     `}
                 >
-                    <Landmark className="mt-0.5 h-5 w-5 text-stellar-400" />
+                    <Landmark className="mt-0.5 h-5 w-5 text-info" />
                     <div>
-                        <div className="text-sm font-medium text-white">Existing Multisig / DAO</div>
-                        <p className="text-xs text-gray-500">
+                        <div className="text-sm font-medium text-ink">Existing Multisig / DAO</div>
+                        <p className="text-xs text-muted">
                             Assign admin rights to an existing smart wallet or governance contract.
                         </p>
                     </div>
@@ -161,8 +161,8 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
                 /* eslint-enable react-hooks/refs */
             )}
 
-            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl">
-                <p className="text-xs text-amber-200 leading-relaxed">
+            <div className="bg-warn-soft border border-warn/20 p-4 rounded-xl">
+                <p className="text-xs text-warn leading-relaxed">
                     <strong>Note:</strong> The administrator has the authority to mint more tokens,
                     change token metadata, and manage other administrative settings.
                     Ensure you have access to this account.
@@ -170,24 +170,24 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
             </div>
 
             {/* Advanced Settings */}
-            <div className="border border-white/10 rounded-xl overflow-hidden">
+            <div className="border border-line rounded-xl overflow-hidden">
                 <button
                     type="button"
                     onClick={() => setAdvancedOpen((o) => !o)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-void-800/40 hover:bg-void-800/60 transition-colors"
+                    className="w-full flex items-center justify-between px-4 py-3 bg-sunken/40 hover:bg-sunken/60 transition-colors"
                 >
-                    <span className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                        <ShieldCheck className="w-4 h-4 text-stellar-400" />
+                    <span className="flex items-center gap-2 text-sm font-medium text-body">
+                        <ShieldCheck className="w-4 h-4 text-info" />
                         Advanced Settings
                     </span>
                     {advancedOpen
-                        ? <ChevronUp className="w-4 h-4 text-gray-500" />
-                        : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                        ? <ChevronUp className="w-4 h-4 text-muted" />
+                        : <ChevronDown className="w-4 h-4 text-muted" />}
                 </button>
 
                 {advancedOpen && (
-                    <div className="px-4 pb-4 pt-2 bg-void-900/30">
-                        <p className="text-xs text-gray-500 mb-3">
+                    <div className="px-4 pb-4 pt-2 bg-sunken/30">
+                        <p className="text-xs text-muted mb-3">
                             These flags restrict who may hold this token and are suited for regulated
                             or security tokens that require KYC / whitelisting.
                         </p>
@@ -200,7 +200,7 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
                             onChange={handleAuthRequiredChange}
                         />
 
-                        <div className="border-t border-white/5" />
+                        <div className="border-t border-line/5" />
 
                         <Toggle
                             id="authorizationRevocable"
@@ -212,18 +212,18 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
                         />
 
                         {!authRequired && (
-                            <p className="text-xs text-gray-600 italic mt-1">
+                            <p className="text-xs text-faint italic mt-1">
                                 Enable &quot;Authorization Required&quot; to use &quot;Authorization Revocable&quot;.
                             </p>
                         )}
 
-                        <p className="text-xs text-gray-600 italic mt-1">
+                        <p className="text-xs text-faint italic mt-1">
                             Leaving &quot;Authorization Revocable&quot; off is permanent — there is no way to
                             turn it on after deploy. Turning it on now keeps a one-way door open: the
                             admin can later give up that power for good, but never regain it.
                         </p>
 
-                        <div className="border-t border-white/5" />
+                        <div className="border-t border-line/5" />
 
                         <Input
                             label="Compliance Node Address (Optional)"
@@ -231,7 +231,7 @@ export const StepAdmin = ({ register, errors, control }: StepProps) => {
                             {...register("complianceNodeAddress")}
                             error={errors.complianceNodeAddress?.message as string}
                         />
-                        <p className="text-xs text-gray-500 leading-relaxed">
+                        <p className="text-xs text-muted leading-relaxed">
                             When set, transfers are validated against this contract before balances move.
                         </p>
                     </div>

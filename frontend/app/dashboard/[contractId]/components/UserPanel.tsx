@@ -148,12 +148,12 @@ export function UserPanel({ contractId, decimals }: UserPanelProps) {
       <div className="flex items-center justify-between mb-6">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            <Wallet className="w-6 h-6 text-stellar-400" />
-            <h2 className="text-2xl font-bold text-white tracking-tight">
+            <Wallet className="w-6 h-6 text-info" />
+            <h2 className="text-2xl font-bold text-ink tracking-tight">
               {t("yourDashboard")}
             </h2>
           </div>
-          <p className="text-sm text-gray-400 mt-2">
+          <p className="text-sm text-muted mt-2">
             {t("balanceLabel", { balance: fetchingBalance ? t("loadingBalance") : balance })}
           </p>
         </div>
@@ -162,7 +162,7 @@ export function UserPanel({ contractId, decimals }: UserPanelProps) {
             href={`https://stellar.expert/explorer/${networkConfig.network}/tx/${lastTxHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-stellar-400 hover:text-stellar-300 transition-colors bg-stellar-400/10 px-3 py-1.5 rounded-full border border-stellar-400/20"
+            className="flex items-center gap-1.5 text-xs text-info hover:text-info transition-colors bg-info-soft px-3 py-1.5 rounded-full border border-info/20"
           >
             {t("lastTx", { hash: lastTxHash.slice(0, 8) })}
             <ExternalLink className="w-3 h-3" />
@@ -172,17 +172,17 @@ export function UserPanel({ contractId, decimals }: UserPanelProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
         {/* ── Burn Form ─────────────────────────────────────── */}
-        <div className="glass-card p-6 flex flex-col hover:border-red-500/30 transition-all duration-300 group">
-          <div className="flex items-center justify-between mb-6 text-red-400">
+        <div className="panel p-6 flex flex-col hover:border-danger/30 transition-all duration-300 group">
+          <div className="flex items-center justify-between mb-6 text-danger">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-red-500/10 rounded-lg group-hover:scale-110 transition-transform">
+              <div className="p-2 bg-danger-soft rounded-lg group-hover:scale-110 transition-transform">
                 <Flame className="w-5 h-5" />
               </div>
               <h3 className="font-bold text-lg">{t("burnTitle")}</h3>
             </div>
           </div>
 
-          <div className="mb-6 flex items-start gap-3 rounded-lg bg-red-500/10 p-3 text-red-400 border border-red-500/20">
+          <div className="mb-6 flex items-start gap-3 rounded-lg bg-danger-soft p-3 text-danger border border-danger/20">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <p className="text-xs leading-relaxed">
               {t("burnWarning")}
@@ -197,14 +197,14 @@ export function UserPanel({ contractId, decimals }: UserPanelProps) {
               label={t("burnAmountLabel")}
               type="number"
               placeholder={t("burnAmountPlaceholder")}
-              className="bg-white/5 border-white/10"
+              className="bg-sunken border-line"
               {...burnForm.register("amount")}
               error={burnForm.formState.errors.amount?.message}
             />
             <Button
               type="submit"
               variant="secondary"
-              className="w-full mt-4 border-red-500/20 hover:border-red-500/40 text-red-400"
+              className="w-full mt-4 border-danger/20 hover:border-danger/40 text-danger"
               isLoading={loading === "burn"}
               disabled={!!loading}
             >

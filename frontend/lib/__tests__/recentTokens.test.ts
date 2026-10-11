@@ -27,7 +27,7 @@ jest.mock("@stellar/stellar-sdk", () => {
   };
 });
 
-const MOCK_FACTORY_ADDRESS = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT";
+const MOCK_FACTORY_ADDRESS = "CCVGV63JM72S7FRSEOV7TYRMUSJVK3YPPYLQS4NLWAAH2FZ3LAV45BAG";
 
 const mockConfig: NetworkConfig = {
   network: "testnet",
@@ -294,10 +294,17 @@ describe("fetchRecentTokens — concurrent scoring batches", () => {
     let concurrentInFlight = 0;
     let maxConcurrentObserved = 0;
 
-    const getEvents = jest.fn().mockImplementation(async (req: { contractIds?: string[] }) => {
-      // The first call (init scan) has a topics filter, not contractIds —
-      // only count the scoring-batch calls.
-      if (!req.contractIds) {
+    type EventRequest = {
+      filters?: { type: string; topics?: unknown; contractIds?: string[] }[];
+    };
+
+    const getEvents = jest.fn().mockImplementation(async (req: EventRequest) => {
+      // The init scan filters on the `init` topic; the scoring batches filter
+      // on contractIds. Both nest that inside `filters`, so discriminate there
+      // — a top-level `req.contractIds` never exists and would make every call
+      // look like the init scan.
+      const isScoringBatch = req.filters?.some((f) => f.contractIds !== undefined);
+      if (!isScoringBatch) {
         return { events: initEvents };
       }
       concurrentInFlight += 1;

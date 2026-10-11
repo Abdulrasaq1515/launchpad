@@ -118,16 +118,16 @@ export function VestingReleaseForm({ onSuccess }: VestingReleaseFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="glass-card p-6 space-y-6">
-      <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 p-3 border border-blue-500/20">
-        <Clock className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-200">
+    <form onSubmit={handleSubmit(onSubmit)} className="panel p-6 space-y-6">
+      <div className="flex items-start gap-2 rounded-lg bg-info-soft p-3 border border-info/20">
+        <Clock className="h-5 w-5 text-info flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-info">
           Release vested tokens for a beneficiary. Available amount depends on the vesting schedule.
         </p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Vesting Contract ID
         </label>
         <Input
@@ -136,12 +136,12 @@ export function VestingReleaseForm({ onSuccess }: VestingReleaseFormProps) {
           {...register("vestingContractId")}
         />
         {errors.vestingContractId && (
-          <p className="text-red-400 text-sm mt-1">{errors.vestingContractId.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.vestingContractId.message}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Recipient Address
         </label>
         <Input
@@ -150,14 +150,14 @@ export function VestingReleaseForm({ onSuccess }: VestingReleaseFormProps) {
           {...register("recipientAddress")}
         />
         {errors.recipientAddress && (
-          <p className="text-red-400 text-sm mt-1">{errors.recipientAddress.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.recipientAddress.message}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Schedule Index{" "}
-          <span className="text-gray-500 font-normal">(optional — defaults to latest)</span>
+          <span className="text-muted font-normal">(optional — defaults to latest)</span>
         </label>
         <Input
           type="number"
@@ -166,7 +166,7 @@ export function VestingReleaseForm({ onSuccess }: VestingReleaseFormProps) {
           {...register("scheduleIndex")}
         />
         {errors.scheduleIndex && (
-          <p className="text-red-400 text-sm mt-1">{errors.scheduleIndex.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.scheduleIndex.message}</p>
         )}
       </div>
 
@@ -307,16 +307,16 @@ export function VestingRevokeForm({ adminAddress, onSuccess }: VestingRevokeForm
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="glass-card p-6 space-y-6 border-red-500/30">
-      <div className="flex items-start gap-2 rounded-lg bg-red-500/10 p-3 border border-red-500/20">
-        <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-red-200">
+    <form onSubmit={handleSubmit(onSubmit)} className="panel p-6 space-y-6 border-danger/30">
+      <div className="flex items-start gap-2 rounded-lg bg-danger-soft p-3 border border-danger/20">
+        <AlertCircle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-danger">
           Revoking a schedule is permanent. Vested tokens go to the recipient, unvested tokens return to admin.
         </p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Vesting Contract ID
         </label>
         <Input
@@ -325,12 +325,12 @@ export function VestingRevokeForm({ adminAddress, onSuccess }: VestingRevokeForm
           {...register("vestingContractId")}
         />
         {errors.vestingContractId && (
-          <p className="text-red-400 text-sm mt-1">{errors.vestingContractId.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.vestingContractId.message}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Recipient Address
         </label>
         <Input
@@ -339,14 +339,14 @@ export function VestingRevokeForm({ adminAddress, onSuccess }: VestingRevokeForm
           {...register("recipientAddress")}
         />
         {errors.recipientAddress && (
-          <p className="text-red-400 text-sm mt-1">{errors.recipientAddress.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.recipientAddress.message}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Schedule Index{" "}
-          <span className="text-gray-500 font-normal">(optional — defaults to latest)</span>
+          <span className="text-muted font-normal">(optional — defaults to latest)</span>
         </label>
         <Input
           type="number"
@@ -355,7 +355,7 @@ export function VestingRevokeForm({ adminAddress, onSuccess }: VestingRevokeForm
           {...register("scheduleIndex")}
         />
         {errors.scheduleIndex && (
-          <p className="text-red-400 text-sm mt-1">{errors.scheduleIndex.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.scheduleIndex.message}</p>
         )}
       </div>
 

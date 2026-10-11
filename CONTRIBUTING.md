@@ -22,9 +22,13 @@ cd soroban-token-launchpad
 # Install frontend deps
 npm install
 
-# Install Rust + Soroban CLI
+# Install Rust (rustup show then installs exactly what rust-toolchain.toml pins)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install --locked soroban-cli
+rustup show
+
+# Install the Stellar CLI (the older `soroban` binary is deprecated)
+curl -sSfL https://github.com/stellar/stellar-cli/releases/download/v28.0.0/stellar-cli-28.0.0-x86_64-unknown-linux-gnu.tar.gz \
+  | tar xz -C ~/.local/bin stellar
 
 # Run a standalone local Soroban network
 # Allows rapid offline testing without waiting on testnet
@@ -177,22 +181,16 @@ Open a [GitHub Discussion](https://github.com/your-org/soroban-token-launchpad/d
 
 ## Regenerating Contract Bindings
 
-TypeScript bindings for the contracts are automatically generated after a successful deployment using `scripts/deploy.ts`. They are stored in `frontend/lib/contracts/`.
-
-If you need to manually regenerate bindings (e.g., after changing contract code without a full re-deploy), you can use the `soroban` CLI:
+TypeScript bindings live in `frontend/lib/bindings/` and are generated from the
+built wasm, not from a deployed contract — so they can be regenerated without
+touching a network:
 
 ```bash
-# Generate token bindings
-soroban contract bindings typescript \
-  --id <TOKEN_CONTRACT_ID> \
-  --network <NETWORK> \
-  --output-dir frontend/lib/contracts/token \
-  --overwrite
-
-# Generate vesting bindings
-soroban contract bindings typescript \
-  --id <VESTING_CONTRACT_ID> \
-  --network <NETWORK> \
-  --output-dir frontend/lib/contracts/vesting \
-  --overwrite
+stellar contract build
+cd frontend && npm run bindings:generate
 ```
+
+`npm run bindings:check` regenerates and fails if the result differs from what
+is committed. Run it after any change to a contract's public interface; stale
+bindings are how two admin actions ended up calling methods that did not
+exist.

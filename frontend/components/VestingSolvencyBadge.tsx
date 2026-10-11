@@ -15,11 +15,11 @@ export function VestingSolvencyBadge({
 }) {
   if (!solvency) {
     return (
-      <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-        <p className="text-sm font-semibold text-gray-200">
+      <div className="rounded-lg border border-line bg-sunken p-4">
+        <p className="text-sm font-semibold text-ink">
           Solvency unavailable
         </p>
-        <p className="mt-1 text-xs leading-relaxed text-gray-400">
+        <p className="mt-1 text-xs leading-relaxed text-muted">
           This vesting contract does not expose live commitment accounting.
         </p>
       </div>
@@ -28,9 +28,9 @@ export function VestingSolvencyBadge({
 
   const Icon = solvency.solvent ? ShieldCheck : AlertTriangle;
   const tone = solvency.solvent
-    ? "border-green-500/30 bg-green-500/10 text-green-200"
-    : "border-red-500/35 bg-red-500/10 text-red-200";
-  const iconTone = solvency.solvent ? "text-green-300" : "text-red-300";
+    ? "border-ok/30 bg-ok-soft text-ok"
+    : "border-danger/35 bg-danger-soft text-danger";
+  const iconTone = solvency.solvent ? "text-ok" : "text-danger";
   const label = solvency.solvent ? "Solvent" : "Underfunded";
 
   return (
@@ -50,13 +50,13 @@ export function VestingSolvencyBadge({
         <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-64">
           <div>
             <p className="opacity-70">Balance</p>
-            <p className="font-mono font-semibold">
+            <p className="data font-semibold">
               {formatTokenAmount(solvency.tokenBalance, decimals)}
             </p>
           </div>
           <div>
             <p className="opacity-70">Committed</p>
-            <p className="font-mono font-semibold">
+            <p className="data font-semibold">
               {formatTokenAmount(solvency.totalCommitted, decimals)}
             </p>
           </div>

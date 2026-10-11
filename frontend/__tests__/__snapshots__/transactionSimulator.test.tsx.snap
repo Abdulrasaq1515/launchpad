@@ -5,7 +5,7 @@ exports[`Pre-flight Check Snapshots matches error display snapshot 1`] = `
   <div
     aria-atomic="true"
     aria-live="polite"
-    class="rounded-xl border border-red-500/30 bg-red-500/10 p-4"
+    class="rounded-xl border border-danger/30 bg-danger-soft p-4"
     role="status"
   >
     <div
@@ -13,7 +13,7 @@ exports[`Pre-flight Check Snapshots matches error display snapshot 1`] = `
     >
       <svg
         aria-hidden="true"
-        class="lucide lucide-circle-alert h-5 w-5 mt-0.5 flex-shrink-0 text-red-400"
+        class="lucide lucide-circle-alert h-5 w-5 mt-0.5 flex-shrink-0 text-danger"
         fill="none"
         height="24"
         stroke="currentColor"
@@ -46,7 +46,7 @@ exports[`Pre-flight Check Snapshots matches error display snapshot 1`] = `
         class="flex-1"
       >
         <h3
-          class="font-semibold text-red-300 mb-2"
+          class="font-semibold text-danger mb-2"
         >
           Cannot proceed with transaction
         </h3>
@@ -54,7 +54,7 @@ exports[`Pre-flight Check Snapshots matches error display snapshot 1`] = `
           class="space-y-1"
         >
           <li
-            class="text-sm text-red-200"
+            class="text-sm text-danger"
           >
             • 
             Insufficient balance
@@ -71,7 +71,7 @@ exports[`Pre-flight Check Snapshots matches success display snapshot 1`] = `
   <div
     aria-atomic="true"
     aria-live="polite"
-    class="rounded-xl border border-green-500/30 bg-green-500/10 p-4"
+    class="rounded-xl border border-ok/30 bg-ok-soft p-4"
     role="status"
   >
     <div
@@ -79,7 +79,7 @@ exports[`Pre-flight Check Snapshots matches success display snapshot 1`] = `
     >
       <svg
         aria-hidden="true"
-        class="lucide lucide-circle-check-big h-5 w-5 flex-shrink-0 text-green-400"
+        class="lucide lucide-circle-check-big h-5 w-5 flex-shrink-0 text-ok"
         fill="none"
         height="24"
         stroke="currentColor"
@@ -101,7 +101,7 @@ exports[`Pre-flight Check Snapshots matches success display snapshot 1`] = `
         class="flex-1"
       >
         <p
-          class="text-sm text-green-200"
+          class="text-sm text-ok"
         >
           Ready to sign
         </p>

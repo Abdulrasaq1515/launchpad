@@ -107,16 +107,16 @@ export function BurnForm({ adminAddress, tokenDecimals, onSuccess }: BurnFormPro
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="glass-card p-6 space-y-6 border-red-500/30">
-      <div className="flex items-start gap-2 rounded-lg bg-red-500/10 p-3 border border-red-500/20">
-        <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-red-200">
+    <form onSubmit={handleSubmit(onSubmit)} className="panel p-6 space-y-6 border-danger/30">
+      <div className="flex items-start gap-2 rounded-lg bg-danger-soft p-3 border border-danger/20">
+        <AlertCircle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-danger">
           Burning tokens permanently removes them from circulation. This action cannot be undone.
         </p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           Token Contract ID
         </label>
         <Input
@@ -125,12 +125,12 @@ export function BurnForm({ adminAddress, tokenDecimals, onSuccess }: BurnFormPro
           {...register("tokenContractId")}
         />
         {errors.tokenContractId && (
-          <p className="text-red-400 text-sm mt-1">{errors.tokenContractId.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.tokenContractId.message}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-body mb-2">
           From Address
         </label>
         <Input
@@ -139,7 +139,7 @@ export function BurnForm({ adminAddress, tokenDecimals, onSuccess }: BurnFormPro
           {...register("fromAddress")}
         />
         {errors.fromAddress && (
-          <p className="text-red-400 text-sm mt-1">{errors.fromAddress.message}</p>
+          <p className="text-danger text-sm mt-1">{errors.fromAddress.message}</p>
         )}
       </div>
 

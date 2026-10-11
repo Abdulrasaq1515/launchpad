@@ -226,11 +226,11 @@ export function AirdropBuilder() {
   return (
     <div className="flex flex-col gap-8">
       {/* Step 1 — allocations */}
-      <section className="rounded-2xl border border-stellar-500/10 bg-void-800/40 p-6">
-        <h2 className="mb-1 text-lg font-semibold text-white">
+      <section className="rounded-2xl border border-info/10 bg-sunken/40 p-6">
+        <h2 className="mb-1 text-lg font-semibold text-ink">
           {t("step1Title")}
         </h2>
-        <p className="mb-5 text-sm text-gray-400">{t("step1Description")}</p>
+        <p className="mb-5 text-sm text-muted">{t("step1Description")}</p>
 
         <div className="mb-4 flex flex-wrap items-end gap-4">
           <Input
@@ -268,7 +268,7 @@ export function AirdropBuilder() {
           />
         </div>
 
-        <label htmlFor="allocations" className="mb-1.5 ml-1 block text-sm font-medium text-gray-300">
+        <label htmlFor="allocations" className="mb-1.5 ml-1 block text-sm font-medium text-body">
           {t("csvLabel")}
         </label>
         <textarea
@@ -281,38 +281,38 @@ export function AirdropBuilder() {
           rows={10}
           spellCheck={false}
           placeholder={t("csvPlaceholder")}
-          className="w-full rounded-xl border border-stellar-500/10 bg-void-800/50 px-4 py-3 font-mono text-xs text-white placeholder:text-gray-500 focus:border-stellar-500/40 focus:outline-none focus:ring-1 focus:ring-stellar-500/20"
+          className="w-full rounded-xl border border-info/10 bg-sunken/50 px-4 py-3 data text-xs text-ink placeholder:text-muted focus:border-info/40 focus:outline-none focus:ring-1 focus:ring-info/20"
         />
 
         {decimalsValue === null && (
-          <p className="mt-2 text-xs text-red-400">{t("invalidDecimals")}</p>
+          <p className="mt-2 text-xs text-danger">{t("invalidDecimals")}</p>
         )}
 
         {parsed && (
           <div className="mt-5 flex flex-col gap-4">
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <div>
-                <dt className="text-xs uppercase tracking-wide text-gray-500">
+                <dt className="text-xs text-muted">
                   {t("recipients")}
                 </dt>
-                <dd className="text-lg font-semibold text-white">
+                <dd className="text-lg font-semibold text-ink">
                   {parsed.allocations.length}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-gray-500">
+                <dt className="text-xs text-muted">
                   {t("totalAllocated")}
                 </dt>
-                <dd className="text-lg font-semibold text-white">
+                <dd className="text-lg font-semibold text-ink">
                   {formatTokenAmount(parsed.total, decimalsValue ?? 7)}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-gray-500">
+                <dt className="text-xs text-muted">
                   {t("rejectedRows")}
                 </dt>
                 <dd
-                  className={`text-lg font-semibold ${parsed.errors.length > 0 ? "text-red-400" : "text-white"}`}
+                  className={`text-lg font-semibold ${parsed.errors.length > 0 ? "text-danger" : "text-ink"}`}
                 >
                   {parsed.errors.length}
                 </dd>
@@ -347,9 +347,9 @@ export function AirdropBuilder() {
             )}
 
             {parsed.allocations.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border border-white/5">
+              <div className="overflow-x-auto rounded-xl border border-line/5">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-white/5 text-gray-400">
+                  <thead className="bg-sunken text-muted">
                     <tr>
                       <th scope="col" className="px-4 py-2 font-medium">
                         {t("address")}
@@ -359,9 +359,9 @@ export function AirdropBuilder() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="font-mono text-gray-300">
+                  <tbody className="data text-body">
                     {parsed.allocations.slice(0, PREVIEW_ROWS).map((a) => (
-                      <tr key={a.address} className="border-t border-white/5">
+                      <tr key={a.address} className="border-t border-line/5">
                         <td className="px-4 py-2">{a.address}</td>
                         <td className="px-4 py-2 text-right">
                           {formatTokenAmount(a.amount, decimalsValue ?? 7)}
@@ -371,7 +371,7 @@ export function AirdropBuilder() {
                   </tbody>
                 </table>
                 {parsed.allocations.length > PREVIEW_ROWS && (
-                  <p className="border-t border-white/5 px-4 py-2 text-xs text-gray-500">
+                  <p className="border-t border-line/5 px-4 py-2 text-xs text-muted">
                     {t("andMore", {
                       count: parsed.allocations.length - PREVIEW_ROWS,
                     })}
@@ -389,18 +389,18 @@ export function AirdropBuilder() {
 
       {/* Step 2 — root + proof export */}
       {built && (
-        <section className="rounded-2xl border border-stellar-500/10 bg-void-800/40 p-6">
-          <h2 className="mb-1 text-lg font-semibold text-white">
+        <section className="rounded-2xl border border-info/10 bg-sunken/40 p-6">
+          <h2 className="mb-1 text-lg font-semibold text-ink">
             {t("step2Title")}
           </h2>
-          <p className="mb-5 text-sm text-gray-400">{t("step2Description")}</p>
+          <p className="mb-5 text-sm text-muted">{t("step2Description")}</p>
 
           <div className="mb-5">
-            <span className="mb-1.5 ml-1 block text-sm font-medium text-gray-300">
+            <span className="mb-1.5 ml-1 block text-sm font-medium text-body">
               {t("merkleRoot")}
             </span>
-            <div className="flex items-center gap-2 rounded-xl border border-stellar-500/10 bg-void-800/50 px-4 py-3">
-              <code className="flex-1 break-all font-mono text-xs text-stellar-300">
+            <div className="flex items-center gap-2 rounded-xl border border-info/10 bg-sunken/50 px-4 py-3">
+              <code className="flex-1 break-all data text-xs text-info">
                 {built.root}
               </code>
               <CopyButton value={built.root} label={t("copyRoot")} />
@@ -421,11 +421,11 @@ export function AirdropBuilder() {
 
       {/* Step 3 — publish on chain */}
       {built && (
-        <section className="rounded-2xl border border-stellar-500/10 bg-void-800/40 p-6">
-          <h2 className="mb-1 text-lg font-semibold text-white">
+        <section className="rounded-2xl border border-info/10 bg-sunken/40 p-6">
+          <h2 className="mb-1 text-lg font-semibold text-ink">
             {t("step3Title")}
           </h2>
-          <p className="mb-5 text-sm text-gray-400">{t("step3Description")}</p>
+          <p className="mb-5 text-sm text-muted">{t("step3Description")}</p>
 
           {!connected ? (
             <Button type="button" onClick={() => void connect()}>
@@ -479,7 +479,7 @@ export function AirdropBuilder() {
                 </Button>
               </div>
 
-              <p className="text-xs text-gray-500">{t("publishHint")}</p>
+              <p className="text-xs text-muted">{t("publishHint")}</p>
             </div>
           )}
         </section>
