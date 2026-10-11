@@ -42,6 +42,10 @@ const ADMIN_PROPOSAL_EXPIRY_LEDGERS: u32 = TTL_LEDGERS;
 /// `https://` URL while keeping the instance entry small.
 const MAX_CONTRACT_URI_LEN: u32 = 256;
 
+/// Hard ceiling on the immutable transfer fee, in basis points
+/// (1 bps = 0.01%). Chosen at deploy, never changed afterward — issue #497.
+const MAX_FEE_BPS: u32 = 1_000; // 10%
+
 // ---------------------------------------------------------------------------
 // Storage keys
 // ---------------------------------------------------------------------------
@@ -83,6 +87,12 @@ pub enum DataKey {
     Stream(Address),
     /// Total amount already released to a recipient by `claim_stream`.
     StreamReleased(Address),
+    /// Immutable transfer fee, in basis points. Written exactly once by
+    /// `initialize` and never written again — issue #497.
+    FeeBps,
+    /// Address that receives the immutable transfer fee. Written exactly
+    /// once alongside `FeeBps` — issue #497.
+    FeeRecipient,
 }
 
 /// Creator-attested record that a launch reached the issuer's success
@@ -192,6 +202,8 @@ pub enum TokenError {
     NoStream = 27,
     /// The authorised invocation does not cover the requested claim range.
     UnauthorizedClaim = 28,
+    /// `fee_bps` exceeds `MAX_FEE_BPS` in `initialize` (issue #497).
+    InvalidFeeBps = 29,
 }
 
 #[contractclient(name = "ComplianceNodeClient")]
@@ -254,6 +266,8 @@ impl TokenContract {
         authorization_revocable: bool,
         compliance_node: Option<Address>,
         contract_uri: Option<String>,
+        fee_bps: u32,
+        fee_recipient: Address,
     ) {
         if env.storage().instance().has(&DataKey::Initialized) {
             panic_with_error!(&env, TokenError::AlreadyInitialized);
@@ -263,6 +277,10 @@ impl TokenContract {
 
         if decimal > 18 {
             panic_with_error!(&env, TokenError::InvalidDecimals);
+        }
+
+        if fee_bps > MAX_FEE_BPS {
+            panic_with_error!(&env, TokenError::InvalidFeeBps);
         }
 
         if let Some(cap) = max_supply {
@@ -297,6 +315,12 @@ impl TokenContract {
             Self::_require_valid_contract_uri(&env, &uri);
             env.storage().instance().set(&DataKey::ContractUri, &uri);
         }
+
+        // Issue #497: written exactly once, here, and never again.
+        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeRecipient, &fee_recipient);
 
         // When authorization_required is enabled the admin is automatically
         // authorized so the initial supply mint succeeds.
@@ -1335,12 +1359,7 @@ impl TokenContract {
         to_ledger: u32,
         auth: &AuthorizedInvocation,
     ) {
-        let expected_args = (
-            recipient.clone(),
-            from_ledger,
-            to_ledger,
-        )
-            .into_val(env);
+        let expected_args = (recipient.clone(), from_ledger, to_ledger).into_val(env);
         let matches = auth.function == symbol_short!("claim_str")
             && auth.contract == env.current_contract_address()
             && auth.args == expected_args;
@@ -1744,6 +1763,16 @@ impl TokenContract {
             panic_with_error!(env, TokenError::InsufficientBalance);
         }
 
+        // Immutable fee (issue #497). Read once; both keys were written in
+        // `initialize`. fee_bps == 0 makes this a complete no-op.
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let fee: i128 = if fee_bps == 0 {
+            0
+        } else {
+            amount * (fee_bps as i128) / 10_000
+        };
+        let net = amount - fee;
+
         env.storage()
             .persistent()
             .set(&from_key, &(from_balance - amount));
@@ -1761,7 +1790,7 @@ impl TokenContract {
             .get(&DataKey::TotalSupply)
             .unwrap_or(0);
 
-        let new_to_balance = to_balance.checked_add(amount).expect("balance overflow");
+        let new_to_balance = to_balance.checked_add(net).expect("balance overflow");
 
         Self::_enforce_max_balance_per_account(env, to, new_to_balance, supply);
 
@@ -1775,6 +1804,28 @@ impl TokenContract {
             (symbol_short!("transfer"), from.clone(), to.clone()),
             amount,
         );
+
+        if fee > 0 {
+            let fee_recipient: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::FeeRecipient)
+                .expect("FeeRecipient missing");
+            let fee_key = DataKey::Balance(fee_recipient);
+            let fee_balance: i128 = env.storage().persistent().get(&fee_key).unwrap_or(0);
+            env.storage().persistent().set(
+                &fee_key,
+                &fee_balance.checked_add(fee).expect("fee balance overflow"),
+            );
+            env.storage()
+                .persistent()
+                .extend_ttl(&fee_key, ttl_ledgers, ttl_ledgers);
+
+            env.events().publish(
+                (symbol_short!("fee_coll"), from.clone(), to.clone()),
+                (amount, fee),
+            );
+        }
     }
 }
 
@@ -1942,12 +1993,15 @@ mod test {
     // activity. `scripts/generate_events_doc.py --check` re-derives this
     // same set directly from source and fails CI if it and
     // `docs/events.json` disagree.
-    const EXPECTED_TOPICS: [&str; 22] = [
+    const EXPECTED_TOPICS: [&str; 27] = [
         "approve",
         "authorize",
         "burn",
+        "claim",
+        "claim_str",
         "clawback",
         "cncl_adm",
+        "fee_coll",
         "freeze",
         "init",
         "mint",
@@ -1956,10 +2010,12 @@ mod test {
         "rev_auth",
         "revoked",
         "rvk_rvc",
+        "seal",
         "set_admin",
         "set_areq",
         "set_cnode",
         "set_max_b",
+        "stream",
         "transfer",
         "unfreeze",
         "unpause",
@@ -2089,6 +2145,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         (env, client, admin, user)
@@ -2186,6 +2244,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
     }
 
@@ -2940,6 +3000,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
     }
 
@@ -3063,6 +3125,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         // Remove mock — only user will auth, not admin.
@@ -3178,6 +3242,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         env.mock_auths(&[soroban_sdk::testutils::MockAuth {
@@ -3214,6 +3280,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         (env, client, admin, user)
@@ -3276,6 +3344,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
     }
 
@@ -3323,6 +3393,8 @@ mod test {
             &false,
             &None,
             &Some(uri.clone()),
+            &0u32,
+            &admin,
         );
 
         assert_eq!(client.contract_uri(), Some(uri));
@@ -3409,6 +3481,8 @@ mod test {
             &false,
             &None,
             &Some(String::from_str(&env, "javascript:alert(1)")),
+            &0u32,
+            &admin,
         );
 
         assert_eq!(result, Err(Ok(TokenError::InvalidContractUri.into())));
@@ -3445,6 +3519,8 @@ mod test {
             &false,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         let non_zero_hash = BytesN::from_array(&env, &[1; 32]);
@@ -3484,6 +3560,8 @@ mod test {
             &true,
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         (env, client, admin, user)
@@ -3639,6 +3717,8 @@ mod test {
             &false, // revocable = false from deploy
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         client.renounce_authorization_revocable();
@@ -3673,6 +3753,8 @@ mod test {
             &false, // revocable = false
             &None,
             &None,
+            &0u32,
+            &admin,
         );
 
         client.authorize_holder(&user);
@@ -4154,7 +4236,10 @@ mod test {
         let (env, client, _, user) = setup();
         client.launch_seal(&BytesN::from_array(&env, &[1u8; 32]));
         client.mint(&user, &500i128);
-        assert_eq!(client.launch_seal_info().unwrap().supply, 1_000_000_0000000i128);
+        assert_eq!(
+            client.launch_seal_info().unwrap().supply,
+            1_000_000_0000000i128
+        );
     }
 
     #[test]
@@ -4191,8 +4276,28 @@ mod test {
             &false,
             &false,
             &None,
+            &None,
+            &0u32,
+            &admin,
         );
         env.set_auths(&[]);
         client.launch_seal(&BytesN::from_array(&env, &[1u8; 32]));
+    }
+
+    /// Issue #497: `FeeBps` is written exactly once, inside `initialize`.
+    /// `include_str!` reads this source at compile time, so a stray
+    /// `set(&DataKey::FeeBps` outside `initialize` fails the build.
+    #[test]
+    fn no_public_fn_writes_fee_bps() {
+        const SRC: &str = include_str!("lib.rs");
+        let boundary = SRC
+            .find("#[cfg(test)]\nmod test {")
+            .expect("test module marker not found");
+        let production = &SRC[..boundary];
+        let count = production.matches("set(&DataKey::FeeBps").count();
+        assert_eq!(
+            count, 1,
+            "DataKey::FeeBps must be written exactly once (in initialize); found {count}"
+        );
     }
 }

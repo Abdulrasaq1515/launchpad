@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   contracts:
@@ -40,6 +40,16 @@ jobs:
         run: |
           if rg -n 'let ttl_ledgers\s*=\s*[0-9]' contracts/token/src/lib.rs; then
             echo 'Use TokenContract::_ttl_ledgers(&env) for persistent-entry TTLs.'
+            exit 1
+          fi
+
+      - name: Assert FeeBps is written exactly once (issue #497)
+        run: |
+          count=$(grep -c "set(&DataKey::FeeBps" contracts/token/src/lib.rs)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly 1 write to DataKey::FeeBps, found $count"
+            echo "  DataKey::FeeBps must be written only in initialize() and"
+            echo "  never again. See issue #497 for the immutable-fee design."
             exit 1
           fi
 
@@ -146,7 +156,7 @@ jobs:
             const path = require('path');
             const crypto = require('crypto');
             const wasmDir = 'target/wasm32-unknown-unknown/release';
-            
+
             if (!fs.existsSync(wasmDir)) {
               console.log('WASM target directory not found.');
               return;
@@ -154,7 +164,7 @@ jobs:
 
             const files = fs.readdirSync(wasmDir);
             const wasmFiles = files.filter(f => f.endsWith('.wasm'));
-            
+
             let message = '### 📦 WASM Report\n\n| Contract | Size | SHA256 Hash |\n| :--- | ---: | :--- |\n';
             for (const file of wasmFiles) {
               const filePath = path.join(wasmDir, file);
@@ -164,18 +174,18 @@ jobs:
               const hash = crypto.createHash('sha256').update(buf).digest('hex');
               message += `| \`${file}\` | ${size} KB | \`${hash}\` |\n`;
             }
-            
+
             // Post result as PR comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const botComment = comments.find(comment => 
               comment.user.type === 'Bot' && comment.body.includes('WASM Report')
             );
-            
+
             if (botComment) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -191,7 +201,6 @@ jobs:
                 body: message,
               });
             }
-
 
   frontend:
     name: Frontend
@@ -225,8 +234,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies

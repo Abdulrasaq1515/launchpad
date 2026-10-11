@@ -138,6 +138,12 @@ pub struct TokenConfig {
     /// in the same transaction. The JSON still lives off-chain; this is
     /// where to fetch it.
     pub contract_uri: Option<String>,
+    /// Immutable transfer fee in basis points, forwarded verbatim to the
+    /// token's `initialize`. 0 disables the fee (issue #497).
+    pub fee_bps: u32,
+    /// Address that receives the immutable transfer fee. Forwarded verbatim
+    /// to the token's `initialize` (issue #497).
+    pub fee_recipient: Address,
 }
 
 // ---------------------------------------------------------------------------
@@ -572,8 +578,7 @@ impl FactoryContract {
             .instance()
             .set(&DataKey::MetadataRegistry, &registry);
         Self::_bump_instance(&env);
-        env.events()
-            .publish((symbol_short!("set_reg"),), registry);
+        env.events().publish((symbol_short!("set_reg"),), registry);
     }
 
     /// Return the configured metadata registry, if any.
@@ -731,6 +736,8 @@ impl FactoryContract {
             &config.authorization_revocable,
             &config.compliance_node,
             &config.contract_uri,
+            &config.fee_bps,
+            &config.fee_recipient,
         );
 
         Self::_register_metadata(env, token_address, &deployer, &config);
@@ -834,15 +841,14 @@ impl FactoryContract {
             .get(&DataKey::MetadataRegistry)
             .unwrap_or_else(|| panic_with_error!(env, FactoryError::MetadataRegistryNotSet));
 
-        soroban_metadata_registry::MetadataRegistryContractClient::new(env, &registry)
-            .register(
-                token_address,
-                &config.symbol,
-                &config.name,
-                deployer,
-                &config.initial_supply,
-                &config.metadata,
-            );
+        soroban_metadata_registry::MetadataRegistryContractClient::new(env, &registry).register(
+            token_address,
+            &config.symbol,
+            &config.name,
+            deployer,
+            &config.initial_supply,
+            &config.metadata,
+        );
     }
 
     fn _record_deployment(env: &Env, token: &Address) {
@@ -991,6 +997,8 @@ mod test {
             compliance_node: None,
             metadata: None,
             contract_uri: None,
+            fee_bps: 0,
+            fee_recipient: admin.clone(),
         }
     }
 
@@ -1020,14 +1028,10 @@ mod test {
         factory_client: &FactoryContractClient<'static>,
         admin: &Address,
     ) -> Address {
-        let registry_id = env.register_contract(
-            None,
-            soroban_metadata_registry::MetadataRegistryContract,
-        );
-        let registry = soroban_metadata_registry::MetadataRegistryContractClient::new(
-            env,
-            &registry_id,
-        );
+        let registry_id =
+            env.register_contract(None, soroban_metadata_registry::MetadataRegistryContract);
+        let registry =
+            soroban_metadata_registry::MetadataRegistryContractClient::new(env, &registry_id);
         registry.initialize(admin, factory_id);
         factory_client.set_metadata_registry(&registry_id);
         registry_id
@@ -1069,6 +1073,8 @@ mod test {
             compliance_node: None,
             metadata: None,
             contract_uri: None,
+            fee_bps: 0,
+            fee_recipient: admin.clone(),
         };
         register_token_at(env, deployer, salt);
         client.try_deploy_token(deployer, salt, &config).is_err()
@@ -1451,7 +1457,10 @@ mod test {
         let deployer = Address::generate(&env);
         let salt = BytesN::from_array(&env, &[8u8; 32]);
         let json = r#"{"name":"Factory Token","symbol":"FTK","description":"hi"}"#;
-        let uri = String::from_str(&env, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+        let uri = String::from_str(
+            &env,
+            "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+        );
         let mut config = default_config(&env, &admin);
         config.metadata = Some(String::from_str(&env, json));
         config.contract_uri = Some(uri.clone());
@@ -1470,10 +1479,7 @@ mod test {
         assert_eq!(record.initial_supply, 1_000_000i128);
         let expected_name = env
             .crypto()
-            .keccak256(&soroban_sdk::Bytes::from_slice(
-                &env,
-                b"Factory Token",
-            ))
+            .keccak256(&soroban_sdk::Bytes::from_slice(&env, b"Factory Token"))
             .into();
         let expected_meta = env
             .crypto()
@@ -1553,6 +1559,8 @@ mod test {
             compliance_node: None,
             metadata: None,
             contract_uri: None,
+            fee_bps: 0,
+            fee_recipient: admin.clone(),
         };
 
         // Only the attacker can auth — never the deployer.
@@ -1695,6 +1703,8 @@ mod test {
             })
             .sum();
         assert_eq!(all, count);
+    }
+
     // ── Admin lifecycle ─────────────────────────────────────────────────
     //
     // Mirrors the token contract's admin suite (see

@@ -82,6 +82,17 @@ export interface DeployTokenParams {
    */
   contractUri?: string;
   /**
+   * Immutable transfer fee in basis points, forwarded to the token's
+   * `initialize`. Range 0..1000 (0%..10%). Defaults to 0 — no fee.
+   * Issue #497.
+   */
+  feeBps?: number;
+  /**
+   * Address that receives the immutable transfer fee. Defaults to the
+   * deployer's own public key when unset. Issue #497.
+   */
+  feeRecipient?: string;
+  /**
    * Pre-generated deploy salt. When supplied the factory will use this salt
    * to derive the deterministic token address shown in the attestation panel
    * (same bytes, same address). When omitted a fresh random salt is generated
@@ -391,6 +402,8 @@ function buildTokenConfigScVals(
       compliance_node: complianceNode,
       contract_uri: params.contractUri ?? null,
       decimal: params.decimals,
+      fee_bps: params.feeBps ?? 0,
+      fee_recipient: params.feeRecipient || params.adminAddress || deployer,
       initial_supply: toBaseUnitsOrThrow(params.initialSupply, params.decimals, "initialSupply"),
       max_supply: maxSupply,
       metadata: params.metadata ?? null,
@@ -403,6 +416,8 @@ function buildTokenConfigScVals(
         compliance_node: ["symbol", "address"],
         contract_uri: ["symbol", "string"],
         decimal: ["symbol", "u32"],
+        fee_bps: ["symbol", "u32"],
+        fee_recipient: ["symbol", "address"],
         initial_supply: ["symbol", "i128"],
         max_supply: ["symbol", "i128"],
         metadata: ["symbol", "string"],
@@ -599,6 +614,9 @@ async function deployLegacy(
         params.complianceNodeAddress && params.complianceNodeAddress.trim().length > 0
           ? params.complianceNodeAddress.trim()
           : undefined,
+      contract_uri: params.contractUri ?? undefined,
+      fee_bps: params.feeBps ?? 0,
+      fee_recipient: params.feeRecipient || params.adminAddress || ctx.publicKey,
     });
   } catch (err) {
     throw {

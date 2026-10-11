@@ -4,7 +4,7 @@
 mod tests {
     #[test]
     fn test_prune_recipient_requires_settlement() {
-        // Issue #458: prune_recipient must check that recipient is fully settled  
+        // Issue #458: prune_recipient must check that recipient is fully settled
         assert!(true, "Settlement check enforced in prune_recipient");
     }
 
