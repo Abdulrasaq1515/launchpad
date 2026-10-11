@@ -30,19 +30,25 @@ npm run test:e2e:report
 
 ## File Structure
 
-- `deploy-flow.spec.ts` - Main test suite
-- `mocks/mockFreighter.ts` - Mock wallet provider
+- `wallet.spec.ts` - Wallet connect/disconnect and network switching
+- `deploy-flow.spec.ts` - Deploy form validation and the 4-step flow
+- `navigation.spec.ts` - Primary navigation rail smoke tests
+- `mocks/mockFreighter.ts` - Mock wallet provider (emulates the Freighter v6
+  `postMessage` bridge)
 - `playwright.config.ts` - Configuration
 
 ## Test Coverage
 
-✅ Page load  
-✅ Wallet connection  
-✅ Form validation (4 steps)  
-✅ Pre-flight checks  
-✅ Deployment confirmation  
-✅ Error handling  
-✅ Navigation (back/forward)  
+✅ Wallet connection (mocked Freighter)  
+✅ Address badge / disconnect  
+✅ Network switching (testnet ⇄ mainnet)  
+✅ Deploy form validation (4 steps)  
+✅ Review-step summary  
+✅ Sidebar navigation
+
+> These tests exercise the UI only — they never submit a real transaction. The
+> mock wallet answers the Freighter messaging protocol; Soroban RPC calls made
+> by the app are allowed to fail without failing the assertions.
 
 ## Need Help?
 
