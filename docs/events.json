@@ -1,5 +1,5 @@
 {
-  "$schema_note": "Single source of truth for docs/events.md. Regenerate the doc after editing this file with: python3 scripts/generate_events_doc.py. Every topic name listed here must match a EXPECTED_TOPICS entry and a symbol_short! literal in the corresponding contract's src/lib.rs production code — scripts/generate_events_doc.py --check enforces that in CI. See issue #340.",
+  "$schema_note": "Single source of truth for docs/events.md. Regenerate the doc after editing this file with: python3 scripts/generate_events_doc.py. Every topic name listed here must match a EXPECTED_TOPICS entry and a symbol_short! literal in the corresponding contract's src/lib.rs production code â€” scripts/generate_events_doc.py --check enforces that in CI. See issue #340.",
   "token": {
     "source": "contracts/token/src/lib.rs",
     "events": [
@@ -57,7 +57,7 @@
       { "functions": ["propose_admin"], "topics": ["prop_adm", "current_admin: Address", "new_admin: Address"], "data": "()" },
       { "functions": ["cancel_admin_proposal"], "topics": ["cncl_adm"], "data": "()" },
       { "functions": ["accept_admin"], "topics": ["set_admin", "old_admin: Address", "new_admin: Address"], "data": "()" },
-      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)", "note": "Irreversible. On the airdrop call `reclaim_unclaimed` first — `reclaim_unclaimed` needs an admin to sweep to, so revoking before it strands whatever is still unclaimed." },
+      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)", "note": "Irreversible. On the airdrop call `reclaim_unclaimed` first â€” `reclaim_unclaimed` needs an admin to sweep to, so revoking before it strands whatever is still unclaimed." },
       { "functions": ["pause"], "topics": ["pause"], "data": "()" },
       { "functions": ["unpause"], "topics": ["unpause"], "data": "()" },
       { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" },
@@ -72,7 +72,7 @@
     "title": "Factory Contract",
     "events": [
       { "functions": ["initialize"], "topics": ["init"], "data": "admin: Address" },
-      { "functions": ["propose_token_wasm_hash"], "topics": ["wasm_chg", "current: BytesN<32>", "proposed: BytesN<32>"], "data": "effective_ledger: u32", "note": "The change notification for the hash `deploy_token` uses: `current` is still in force (all-zeros when the factory has never had one), `proposed` is the replacement, and it becomes acceptable at ledger `effective_ledger` — `TOKEN_WASM_CHANGE_DELAY_LEDGERS` (six hours) after the proposal. A watcher seeing this knows a rotation is in flight and has the whole delay to object, up to `cancel_token_wasm_proposal`." },
+      { "functions": ["propose_token_wasm_hash"], "topics": ["wasm_chg", "current: BytesN<32>", "proposed: BytesN<32>"], "data": "effective_ledger: u32", "note": "The change notification for the hash `deploy_token` uses: `current` is still in force (all-zeros when the factory has never had one), `proposed` is the replacement, and it becomes acceptable at ledger `effective_ledger` â€” `TOKEN_WASM_CHANGE_DELAY_LEDGERS` (six hours) after the proposal. A watcher seeing this knows a rotation is in flight and has the whole delay to object, up to `cancel_token_wasm_proposal`." },
       { "functions": ["cancel_token_wasm_proposal"], "topics": ["cncl_wasm"], "data": "()" },
       { "functions": ["accept_token_wasm_hash"], "topics": ["set_wasm"], "data": "wasm_hash: BytesN<32>", "note": "Emitted only once the delay has elapsed and the hash actually changed; from this point every `deploy_token` deploys `wasm_hash`." },
       { "functions": ["set_metadata_registry"], "topics": ["set_reg"], "data": "registry: Address", "note": "The registry `deploy_token` writes indexed launch records to. Replacing it does not migrate existing records." },
@@ -80,7 +80,7 @@
       { "functions": ["propose_admin"], "topics": ["prop_adm", "current_admin: Address", "new_admin: Address"], "data": "()" },
       { "functions": ["cancel_admin_proposal"], "topics": ["cncl_adm"], "data": "()" },
       { "functions": ["accept_admin"], "topics": ["set_admin", "old_admin: Address", "new_admin: Address"], "data": "()" },
-      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)", "note": "Irreversible. `deploy_token` keeps working against the already-recorded WASM hash — revoking freezes the factory's configuration, not the deployment service." },
+      { "functions": ["revoke_admin"], "topics": ["revoked"], "data": "bool (always true)", "note": "Irreversible. `deploy_token` keeps working against the already-recorded WASM hash â€” revoking freezes the factory's configuration, not the deployment service." },
       { "functions": ["pause"], "topics": ["pause"], "data": "()" },
       { "functions": ["unpause"], "topics": ["unpause"], "data": "()" },
       { "functions": ["upgrade"], "topics": ["upgrade"], "data": "new_wasm_hash: BytesN<32>" }
