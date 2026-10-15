@@ -6,6 +6,9 @@ import { useWallet } from "./useWallet";
 import { useNetwork } from "../providers/NetworkProvider";
 import { toBaseUnits } from "@/lib/utils";
 import { verifyFactory } from "@/lib/stellar";
+import { Client as TokenClient } from "@/lib/bindings/token/src/index";
+import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
+import { saveMetadataForContract } from "../deploy/utils/metadata";
 
 /**
  * Cryptographically secure random bytes for the deploy salt.
@@ -73,6 +76,12 @@ export interface DeployTokenParams {
    * at deploy time.
    */
   salt?: Uint8Array;
+  // Issue #451: Optional metadata fields for off-chain storage
+  description?: string;
+  logoUrl?: string;
+  website?: string;
+  twitter?: string;
+  discord?: string;
 }
 
 export interface DeployTokenResult {
@@ -473,6 +482,25 @@ async function deployViaFactory(
   const assembled = StellarSdk.rpc.assembleTransaction(tx, sim).build();
   const signedXdr = await signPrepared(assembled, ctx);
   const transactionHash = await sendAndPoll(signedXdr, ctx, contractId);
+
+  // ── Step 2: Save metadata off-chain ─────────────────────────────────
+  // Store the five metadata fields client-side after successful deploy.
+  // This is the off-chain fix for issue #451 - the on-chain registry
+  // (issue #204) is the intended long-term destination.
+  try {
+    saveMetadataForContract(contractId, {
+      name: params.name,
+      symbol: params.symbol,
+      description: params.description,
+      logoUrl: params.logoUrl,
+      website: params.website,
+      twitter: params.twitter,
+      discord: params.discord,
+    });
+  } catch (metadataError) {
+    // Non-fatal - don't fail the entire deployment for metadata storage issues
+    console.warn("Failed to save metadata for contract:", metadataError);
+  }
 
   return { contractId, transactionHash };
 }
