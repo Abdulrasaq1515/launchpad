@@ -5,9 +5,12 @@ import { Download, FileText, Loader2, AlertCircle, ChevronDown, Info } from "luc
 import {
     formatTokenAmount,
     truncateAddress,
+    simulateCall,
+    decodeI128,
     type TransactionItem
 } from "@/lib/stellar";
 import { useSoroban } from "@/hooks/useSoroban";
+import { useNetwork } from "@/app/providers/NetworkProvider";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -29,8 +32,13 @@ export default function TransactionHistory({
     const [error, setError] = useState<string | null>(null);
     const [showExportOptions, setShowExportOptions] = useState(false);
     const [windowStartLedger, setWindowStartLedger] = useState<number | null>(null);
+    
+    // Issue #475: Contract-authoritative stats instead of partial sums
+    const [totalMinted, setTotalMinted] = useState<string | null>(null);
+    const [contractStatsLoading, setContractStatsLoading] = useState(true);
 
     const { fetchTransactionHistory } = useSoroban();
+    const { networkConfig } = useNetwork();
 
     const loadHistory = useCallback(async () => {
         setLoading(true);
@@ -67,24 +75,58 @@ export default function TransactionHistory({
         loadHistory();
     }, [loadHistory]);
 
-    const stats = useMemo(() => {
-        let totalMinted = BigInt(0);
-        const recipients = new Set<string>();
+    // Issue #475: Fetch contract-authoritative total minted on mount
+    // totalMinted = total_supply() + total_burned()
+    useEffect(() => {
+        let cancelled = false;
 
+        const fetchContractStats = async () => {
+            setContractStatsLoading(true);
+            try {
+                const [supplyVal, burnedVal] = await Promise.all([
+                    simulateCall(contractId, "total_supply", networkConfig),
+                    simulateCall(contractId, "total_burned", networkConfig),
+                ]);
+
+                if (cancelled) return;
+
+                const supply = BigInt(decodeI128(supplyVal));
+                const burned = BigInt(decodeI128(burnedVal));
+                const minted = supply + burned;
+
+                setTotalMinted(formatTokenAmount(minted.toString(), decimals));
+            } catch (err) {
+                console.error("Failed to fetch contract stats:", err);
+                // Non-fatal - leave totalMinted as null
+                if (!cancelled) {
+                    setTotalMinted(null);
+                }
+            } finally {
+                if (!cancelled) {
+                    setContractStatsLoading(false);
+                }
+            }
+        };
+
+        fetchContractStats();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [contractId, decimals, networkConfig]);
+
+    // Issue #475: Recipient count is partial - only covers loaded history events
+    const recipientCount = useMemo(() => {
+        const recipients = new Set<string>();
         history.forEach((tx) => {
-            if (tx.type === "mint") {
-                totalMinted += BigInt(tx.amount);
-                if (tx.to) recipients.add(tx.to);
+            if (tx.type === "mint" && tx.to) {
+                recipients.add(tx.to);
             } else if (tx.type === "transfer" && tx.to) {
                 recipients.add(tx.to);
             }
         });
-
-        return {
-            totalMinted: formatTokenAmount(totalMinted.toString(), decimals),
-            totalRecipients: recipients.size,
-        };
-    }, [history, decimals]);
+        return recipients.size;
+    }, [history]);
 
     const truncatedWindowNotice = useMemo(() => {
         if (windowStartLedger === null || history.length === 0) return null;
@@ -122,14 +164,22 @@ export default function TransactionHistory({
         doc.text(`Contract ID: ${contractId}`, 14, 30);
         doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 37);
 
-        // Add summary
+        // Add summary with Issue #475 annotations
         doc.setFontSize(14);
         doc.setTextColor(0);
         doc.text("Summary Statistics", 14, 50);
 
         doc.setFontSize(11);
-        doc.text(`Total Minted: ${stats.totalMinted} ${symbol}`, 14, 58);
-        doc.text(`Total Recipients: ${stats.totalRecipients}`, 14, 65);
+        doc.text(`Total Minted: ${totalMinted || 'N/A'} ${symbol}`, 14, 58);
+        doc.text(`  (From contract state: total_supply + total_burned)`, 14, 63);
+        doc.text(`Recipients in Loaded History: ${recipientCount}`, 14, 70);
+        doc.text(`  (Covers ${history.length} loaded events)`, 14, 75);
+
+        if (history.length > 0) {
+            const firstTimestamp = new Date(history[0].timestamp).toLocaleDateString();
+            const lastTimestamp = new Date(history[history.length - 1].timestamp).toLocaleDateString();
+            doc.text(`Event window: ${firstTimestamp} to ${lastTimestamp}`, 14, 82);
+        }
 
         // Add table
         const tableData = history.map(tx => [
@@ -142,7 +192,7 @@ export default function TransactionHistory({
         ]);
 
         autoTable(doc, {
-            startY: 75,
+            startY: 90,
             head: [["Type", "From", "To", "Amount", "Ledger", "Timestamp"]],
             body: tableData,
             styles: { fontSize: 8 },
@@ -156,18 +206,25 @@ export default function TransactionHistory({
     const exportCSV = () => {
         const exportData = prepareExportData();
 
-        // Create header rows
+        // Create header rows with Issue #475 annotations
         const csvRows = [
             `Token Transaction Report: ${symbol}`,
             `Contract ID: ${contractId}`,
             `Generated: ${new Date().toLocaleString()}`,
             "",
             "Summary Statistics",
-            `Total Minted: ${stats.totalMinted} ${symbol}`,
-            `Total Recipients: ${stats.totalRecipients}`,
-            "",
-            "Type,From,To,Amount,Ledger,Transaction ID,Timestamp"
+            `Total Minted: ${totalMinted || 'N/A'} ${symbol} (from contract state: total_supply + total_burned)`,
+            `Recipients in Loaded History: ${recipientCount} (covers ${history.length} loaded events)`,
         ];
+
+        if (history.length > 0) {
+            const firstTimestamp = new Date(history[0].timestamp).toLocaleDateString();
+            const lastTimestamp = new Date(history[history.length - 1].timestamp).toLocaleDateString();
+            csvRows.push(`Event window: ${firstTimestamp} to ${lastTimestamp}`);
+        }
+
+        csvRows.push("");
+        csvRows.push("Type,From,To,Amount,Ledger,Transaction ID,Timestamp");
 
         // Add data rows
         exportData.forEach(tx => {
@@ -209,16 +266,31 @@ export default function TransactionHistory({
                     <span className="text-xs font-medium text-muted">
                         Total Minted to Date
                     </span>
-                    <p className="mt-1 text-xl font-bold text-ink">
-                        {stats.totalMinted} <span className="text-info text-sm font-normal">{symbol}</span>
+                    {contractStatsLoading ? (
+                        <div className="mt-1 flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-info" />
+                            <span className="text-sm text-muted">Loading...</span>
+                        </div>
+                    ) : totalMinted !== null ? (
+                        <p className="mt-1 text-xl font-bold text-ink">
+                            {totalMinted} <span className="text-info text-sm font-normal">{symbol}</span>
+                        </p>
+                    ) : (
+                        <p className="mt-1 text-sm text-muted">Unable to load</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted">
+                        From contract state (total_supply + total_burned)
                     </p>
                 </div>
                 <div className="panel p-4">
                     <span className="text-xs font-medium text-muted">
-                        Total Recipients
+                        Recipients in Loaded History
                     </span>
                     <p className="mt-1 text-xl font-bold text-ink">
-                        {stats.totalRecipients}
+                        {recipientCount}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                        Unique addresses in {history.length} loaded events
                     </p>
                 </div>
             </div>
