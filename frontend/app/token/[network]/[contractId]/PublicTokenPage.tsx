@@ -28,6 +28,19 @@ import { TokenStatusBanner } from "@/components/TokenStatusBanner";
 import { ContractVerificationBadge } from "@/components/ui/ContractVerificationBadge";
 import InvalidTokenContract from "../../../components/InvalidTokenContract";
 
+// Helper function to read metadata from off-chain storage (issue #451)
+// This is the browser-local storage path - the on-chain registry (issue #204)
+// is the intended long-term destination for metadata.
+function getStoredMetadata(contractId: string) {
+  try {
+    const key = `soropad:metadata:${contractId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -354,6 +367,7 @@ export default function PublicTokenPage({
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [holders, setHolders] = useState<TokenHolder[]>([]);
   const [walletState, setWalletState] = useState<WalletTokenState | null>(null);
+  const [storedMetadata, setStoredMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
@@ -398,6 +412,11 @@ export default function PublicTokenPage({
       // If validation passes, fetch token info
       const info = await fetchTokenInfo(contractId);
       setTokenInfo(info);
+
+      // Load stored metadata from off-chain storage (issue #451)
+      // This supplements any on-chain contract_uri data
+      const metadata = getStoredMetadata(contractId);
+      setStoredMetadata(metadata);
 
       // Attempt to load holders (best-effort for classic-wrapped assets)
       const holderData = await fetchTopHolders(contractId);
@@ -519,6 +538,94 @@ export default function PublicTokenPage({
           )}
         </div>
       </section>
+
+      {/* Metadata */}
+      {storedMetadata && (
+        <section aria-label="Token Metadata" className="mb-10">
+          <h2 className="mb-4 text-sm font-medium text-muted">
+            About This Token
+          </h2>
+          <div className="panel p-6">
+            {storedMetadata.description && (
+              <div className="mb-6">
+                <p className="text-ink leading-relaxed">{storedMetadata.description}</p>
+              </div>
+            )}
+            
+            {(storedMetadata.website || storedMetadata.twitter || storedMetadata.discord || storedMetadata.logoUrl) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                {storedMetadata.website && (
+                  <a 
+                    href={storedMetadata.website} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-3 rounded-lg bg-sunken hover:bg-line/5 transition-colors group"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-info"></div>
+                    <div>
+                      <div className="text-xs text-muted">Website</div>
+                      <div className="text-info group-hover:text-info-hover transition-colors truncate">
+                        {storedMetadata.website.replace(/^https?:\/\//, '')}
+                      </div>
+                    </div>
+                  </a>
+                )}
+                
+                {storedMetadata.twitter && (
+                  <a 
+                    href={storedMetadata.twitter} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-3 rounded-lg bg-sunken hover:bg-line/5 transition-colors group"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                    <div>
+                      <div className="text-xs text-muted">Twitter</div>
+                      <div className="text-blue-400 group-hover:text-blue-300 transition-colors truncate">
+                        {storedMetadata.twitter.replace(/^https?:\/\/(www\.)?(twitter\.com\/|x\.com\/)?/, '@')}
+                      </div>
+                    </div>
+                  </a>
+                )}
+                
+                {storedMetadata.discord && (
+                  <a 
+                    href={storedMetadata.discord} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-3 rounded-lg bg-sunken hover:bg-line/5 transition-colors group"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-indigo-400"></div>
+                    <div>
+                      <div className="text-xs text-muted">Discord</div>
+                      <div className="text-indigo-400 group-hover:text-indigo-300 transition-colors truncate">
+                        Join Server
+                      </div>
+                    </div>
+                  </a>
+                )}
+                
+                {storedMetadata.logoUrl && (
+                  <a 
+                    href={storedMetadata.logoUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-3 rounded-lg bg-sunken hover:bg-line/5 transition-colors group"
+                  >
+                    <div className="w-2 h-2 rounded-full bg-ok"></div>
+                    <div>
+                      <div className="text-xs text-muted">Logo</div>
+                      <div className="text-ok group-hover:text-ok-hover transition-colors truncate">
+                        View Logo
+                      </div>
+                    </div>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <section aria-label="Token details" className="mb-10">
         <h2 className="mb-4 text-sm font-medium text-muted">

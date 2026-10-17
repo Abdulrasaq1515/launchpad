@@ -91,10 +91,19 @@ export default function ActivityFeed({
           if (!isRefresh) {
             setWindowStartLedger(window.startLedger ?? null);
           }
-          // First load or Refresh
-          // If refresh, we might want to smartly prepend, but replacing is simpler for pagination reset.
-          // Actually, just leaving it be or updating if head is different is better UX.
-          setOperations(records);
+          // Issue #452: For refresh, merge new events at the head instead of
+          // replacing the entire list, so users on page 4 stay on page 4
+          if (isRefresh) {
+            setOperations((prev) => {
+              const existingIds = new Set(prev.map((op) => op.id));
+              const newOps = records.filter((op) => !existingIds.has(op.id));
+              return [...newOps, ...prev];
+            });
+          } else {
+            // Initial load - replace everything
+            setOperations(records);
+          }
+          // Set live start ledger for the live events hook
           setLiveStartLedger(
             records.reduce(
               (latest, record) => Math.max(latest, record.ledger ?? 0),
