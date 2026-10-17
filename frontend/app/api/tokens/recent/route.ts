@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NETWORKS, type NetworkType } from "@/types/network";
-import { fetchRecentTokens, type RecentToken } from "@/lib/recentTokens";
+import { fetchRecentTokens, type FetchRecentTokensResult } from "@/lib/recentTokens";
 
 // NOTE: Any Mercury indexer integration in this route must use the server-only
 // MERCURY_AUTH_TOKEN environment variable (no NEXT_PUBLIC_ prefix). This route
@@ -9,7 +9,7 @@ import { fetchRecentTokens, type RecentToken } from "@/lib/recentTokens";
 // client or read it from a NEXT_PUBLIC_ variable.
 
 interface CacheEntry {
-  data: RecentToken[];
+  data: FetchRecentTokensResult;
   expiresAt: number;
 }
 
@@ -19,6 +19,9 @@ const cache = new Map<string, CacheEntry>();
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const network = (searchParams.get("network") ?? "testnet") as NetworkType;
+  const cursor = searchParams.get("cursor") ?? undefined;
+  const limitParam = searchParams.get("limit");
+  const limit = limitParam ? parseInt(limitParam, 10) : 12;
 
   if (network !== "testnet" && network !== "mainnet") {
     return NextResponse.json(
@@ -27,7 +30,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const cached = cache.get(network);
+  // Issue #477: Cache key includes cursor to support pagination
+  const cacheKey = `${network}-${cursor || 'initial'}`;
+  const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return NextResponse.json(cached.data);
   }
@@ -35,18 +40,18 @@ export async function GET(request: Request) {
   try {
     const config = NETWORKS[network];
     const factoryAddress = process.env.NEXT_PUBLIC_FACTORY_ADDRESS ?? "";
-    const tokens = await fetchRecentTokens(config, factoryAddress);
+    const result = await fetchRecentTokens(config, factoryAddress, { cursor, limit });
 
-    cache.set(network, {
-      data: tokens,
+    cache.set(cacheKey, {
+      data: result,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
 
-    return NextResponse.json(tokens);
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to fetch recent tokens:", error);
 
-    // If Mercury is not configured, return empty array with informational header
+    // If Mercury is not configured, return empty result with informational header
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (
       errorMessage.includes("getEvents") ||
@@ -55,7 +60,7 @@ export async function GET(request: Request) {
     ) {
       const headers = new Headers();
       headers.set("X-Note", "Mercury indexer not configured");
-      return NextResponse.json([], { headers });
+      return NextResponse.json({ tokens: [], nextCursor: null }, { headers });
     }
 
     return NextResponse.json(

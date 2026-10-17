@@ -5,3 +5,5 @@ issue.md
 pr.md
 *.stackdump
 *.tsbuildinfo
+config.bat
+node_modules

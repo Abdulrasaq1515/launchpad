@@ -4,7 +4,7 @@
   "description": "Sponsored deploy fee-bump endpoint for SoroPad",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node init && node server.js",
     "test": "node --test test/sponsor.test.js"
   },
   "dependencies": {

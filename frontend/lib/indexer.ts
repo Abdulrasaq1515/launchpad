@@ -188,11 +188,38 @@ async function fetchEventsFromRpc(
       };
     });
 
-    // Determine next cursor from the last event's ledge
+    // Determine next cursor from the last event's ledger
+    // Issue #452: +1 because getEvents treats startLedger as inclusive;
+    // we want the exclusive next ledger to avoid re-fetching events from
+    // the current last ledger.
     let nextCursor: string | null = null;
     if (events.length > 0) {
       const lastEvent = events[events.length - 1];
-      nextCursor = `ledger-${lastEvent.ledger}`;
+      
+      // Handle limit saturation: if we got a full page, the last ledger
+      // might contain more events than were returned. In this case, the
+      // cursor is unreliable for advancing.
+      if (events.length === limit) {
+        // Check if all events in the response are from the same ledger
+        const firstEventLedger = events[0].ledger;
+        const allSameLedger = events.every(e => e.ledger === firstEventLedger);
+        
+        if (allSameLedger) {
+          // All events from same ledger and we hit the limit - we're stuck
+          // in an infinite loop scenario. Return null cursor to signal completion.
+          console.warn(
+            `RPC event pagination saturated at ledger ${firstEventLedger}. ` +
+            `All ${limit} events from same ledger. Pagination halted.`
+          );
+          nextCursor = null;
+        } else {
+          // We have events from multiple ledgers, advance past the last one
+          nextCursor = `ledger-${lastEvent.ledger + 1}`;
+        }
+      } else {
+        // Not at limit, safe to advance
+        nextCursor = `ledger-${lastEvent.ledger + 1}`;
+      }
     }
 
     return { events, nextCursor, windowInfo };

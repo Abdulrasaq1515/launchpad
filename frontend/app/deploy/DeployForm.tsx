@@ -17,7 +17,6 @@ import { StepReview } from "./steps/StepReview";
 import { FeeEstimation } from "./components/FeeEstimation";
 import { useTransactionSimulator } from "@/hooks/useTransactionSimulator";
 import { useWallet } from "@/app/hooks/useWallet";
-import { savePendingMetadata } from "./utils/metadata";
 import { ArrowLeft, ArrowRight, Rocket, Wallet } from "lucide-react";
 import { useNetwork } from "@/app/providers/NetworkProvider";
 import { useToast } from "@/app/providers/ToastProvider";
@@ -319,10 +318,19 @@ export default function DeployForm() {
         authorizationRequired: data.authorizationRequired ?? false,
         authorizationRevocable: data.authorizationRevocable ?? false,
         complianceNodeAddress: data.complianceNodeAddress || undefined,
+<<<<<<< HEAD
         metadata: metadataJson,
         // Pass the pre-generated salt so the on-chain address matches
         // exactly what was shown in the attestation panel.
         salt: deploySalt ?? undefined,
+=======
+        // Pass metadata fields for off-chain storage (issue #451)
+        description: data.description,
+        logoUrl: data.logoUrl,
+        website: data.website,
+        twitter: data.twitter,
+        discord: data.discord,
+>>>>>>> 953399eb (fix(frontend): store deploy metadata, fix indexer cursor, correct history stats (#451, #452, #475) Closes #451 - Deploy metadata storage loss Closes #452 - Indexer RPC cursor duplication Closes #475 - Transaction history partial stats ## Issue #451: Store Deploy Metadata (Off-Chain Fix) - Added saveMetadataForContract() call in deploy success callback - Extended DeployTokenParams with five metadata fields: description, logoUrl, website, twitter, discord - Metadata stored client-side using localStorage at key soropad:metadata:${contractId} - TokenDashboard now displays stored metadata when present - PublicTokenPage displays metadata for visitors - Added reference to issue #204 for future on-chain registry ## Issue #452: Fix Indexer RPC Fallback Cursor - Corrected cursor formula from ledger-${lastEvent.ledger} to ledger-${lastEvent.ledger + 1} - Accounts for getEvents treating startLedger as inclusive - Added limit-saturation handling: detects when all events from same ledger and returns null cursor - Prevents infinite pagination loops and cursor re-reading - Fixed ActivityFeed refresh to merge new events at head instead of replacing entire list - Preserves user pagination position when live events arrive ## Issue #475: Fix TransactionHistory Partial Stats - Added useEffect to fetch contract-authoritative total_supply() and total_burned() on mount - Replaced partial useMemo stats with contract state computation - totalMinted now computed as total_supply + total_burned from actual contract - Relabeled recipient stat to 'Recipients in Loaded History' to indicate partial coverage - Updated CSV and PDF exports with window annotations explaining stat sources - Stats remain constant when loading additional history pages ## Tests - Added deployMetadata.test.ts covering cross-boundary metadata storage - Tests verify saveMetadataForContract is called with correct args - Tests validate all five metadata fields are preserved through storage ## Files Modified - frontend/app/hooks/useDeployToken.ts - metadata save call, params extension - frontend/app/deploy/DeployForm.tsx - removed unused import, pass metadata to hook - frontend/app/dashboard/[contractId]/TokenDashboard.tsx - metadata reading and UI - frontend/app/token/[contractId]/PublicTokenPage.tsx - metadata reading and display - frontend/lib/indexer.ts - cursor fix, saturation handling - frontend/app/dashboard/[contractId]/ActivityFeed.tsx - refresh merge fix - frontend/app/dashboard/[contractId]/TransactionHistory.tsx - contract stats, export annotations)
       });
 
       setPreflightResult({
@@ -335,7 +343,27 @@ export default function DeployForm() {
         `Token deployed successfully. Transaction hash ${result.transactionHash}.`,
       );
 
+<<<<<<< HEAD
       recordDeployment(data, result.contractId);
+=======
+      // Set client-side deploy cooldown (per-wallet)
+      try {
+        const key = `soropad:lastDeploy:${publicKey ?? "anonymous"}`;
+        localStorage.setItem(key, Date.now().toString());
+
+        // Track deployment for user dashboard
+        if (publicKey) {
+          trackDeployment(publicKey, {
+            contractId: result.contractId,
+            name: data.name,
+            symbol: data.symbol,
+            network: networkConfig.network,
+          });
+        }
+      } catch {
+        // Ignore tracking errors
+      }
+>>>>>>> 953399eb (fix(frontend): store deploy metadata, fix indexer cursor, correct history stats (#451, #452, #475) Closes #451 - Deploy metadata storage loss Closes #452 - Indexer RPC cursor duplication Closes #475 - Transaction history partial stats ## Issue #451: Store Deploy Metadata (Off-Chain Fix) - Added saveMetadataForContract() call in deploy success callback - Extended DeployTokenParams with five metadata fields: description, logoUrl, website, twitter, discord - Metadata stored client-side using localStorage at key soropad:metadata:${contractId} - TokenDashboard now displays stored metadata when present - PublicTokenPage displays metadata for visitors - Added reference to issue #204 for future on-chain registry ## Issue #452: Fix Indexer RPC Fallback Cursor - Corrected cursor formula from ledger-${lastEvent.ledger} to ledger-${lastEvent.ledger + 1} - Accounts for getEvents treating startLedger as inclusive - Added limit-saturation handling: detects when all events from same ledger and returns null cursor - Prevents infinite pagination loops and cursor re-reading - Fixed ActivityFeed refresh to merge new events at head instead of replacing entire list - Preserves user pagination position when live events arrive ## Issue #475: Fix TransactionHistory Partial Stats - Added useEffect to fetch contract-authoritative total_supply() and total_burned() on mount - Replaced partial useMemo stats with contract state computation - totalMinted now computed as total_supply + total_burned from actual contract - Relabeled recipient stat to 'Recipients in Loaded History' to indicate partial coverage - Updated CSV and PDF exports with window annotations explaining stat sources - Stats remain constant when loading additional history pages ## Tests - Added deployMetadata.test.ts covering cross-boundary metadata storage - Tests verify saveMetadataForContract is called with correct args - Tests validate all five metadata fields are preserved through storage ## Files Modified - frontend/app/hooks/useDeployToken.ts - metadata save call, params extension - frontend/app/deploy/DeployForm.tsx - removed unused import, pass metadata to hook - frontend/app/dashboard/[contractId]/TokenDashboard.tsx - metadata reading and UI - frontend/app/token/[contractId]/PublicTokenPage.tsx - metadata reading and display - frontend/lib/indexer.ts - cursor fix, saturation handling - frontend/app/dashboard/[contractId]/ActivityFeed.tsx - refresh merge fix - frontend/app/dashboard/[contractId]/TransactionHistory.tsx - contract stats, export annotations)
 
       toast.show({
         title: "Token deployed successfully",

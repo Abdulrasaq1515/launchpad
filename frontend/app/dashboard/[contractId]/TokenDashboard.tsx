@@ -35,6 +35,19 @@ import { useContractRead } from "./hooks/useContractRead";
 import { getTrackedDeployments } from "@/lib/deployments";
 import { useFrozenAccounts } from "./hooks/useFrozenAccounts";
 
+// Helper function to read metadata from off-chain storage (issue #451)
+// This is the browser-local storage path - the on-chain registry (issue #204)
+// is the intended long-term destination for metadata.
+function getStoredMetadata(contractId: string) {
+  try {
+    const key = `soropad:metadata:${contractId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main dashboard component
 // ---------------------------------------------------------------------------
@@ -48,6 +61,7 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
   const [walletState, setWalletState] = useState<WalletTokenState | null>(
     null,
   );
+  const [storedMetadata, setStoredMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { publicKey, connected } = useWallet();
@@ -99,6 +113,11 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
     try {
       const info = await fetchTokenInfo(contractId);
       setTokenInfo(info);
+
+      // Load stored metadata from off-chain storage (issue #451)
+      // This supplements the on-chain contract_uri data
+      const metadata = getStoredMetadata(contractId);
+      setStoredMetadata(metadata);
 
       // Attempt to load holders (best-effort for classic-wrapped assets)
       const holderData = await fetchTopHolders(contractId);
@@ -256,25 +275,100 @@ export default function TokenDashboard({ contractId }: { contractId: string }) {
         </div>
       </section>
 
-      {/* Metadata URI */}
-      {tokenInfo.contractUri && (
-        <section aria-label="Metadata URI" className="mb-10">
+      {/* Metadata URI and Off-chain Metadata */}
+      {(tokenInfo.contractUri || storedMetadata) && (
+        <section aria-label="Metadata" className="mb-10">
           <h2 className="mb-4 text-sm font-medium text-muted">
             Metadata
           </h2>
-          <div className="panel flex flex-col gap-1 p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">
-                URI
-              </span>
-            </div>
-            <SafeExternalLink
-              href={tokenInfo.contractUri}
-              className="truncate text-lg font-semibold text-info hover:text-info transition-colors"
-              blockedClassName="truncate text-lg font-semibold text-muted cursor-not-allowed"
-            >
-              {tokenInfo.contractUri}
-            </SafeExternalLink>
+          <div className="space-y-4">
+            {tokenInfo.contractUri && (
+              <div className="panel flex flex-col gap-1 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted">
+                    On-chain URI
+                  </span>
+                </div>
+                <SafeExternalLink
+                  href={tokenInfo.contractUri}
+                  className="truncate text-lg font-semibold text-info hover:text-info transition-colors"
+                  blockedClassName="truncate text-lg font-semibold text-muted cursor-not-allowed"
+                >
+                  {tokenInfo.contractUri}
+                </SafeExternalLink>
+              </div>
+            )}
+            
+            {storedMetadata && (
+              <div className="panel p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted">
+                    Off-chain Metadata
+                  </span>
+                  <span className="text-xs text-muted">
+                    Stored locally • See issue #204 for on-chain registry
+                  </span>
+                </div>
+                <div className="grid gap-3">
+                  {storedMetadata.description && (
+                    <div>
+                      <span className="text-xs text-muted">Description:</span>
+                      <p className="text-sm text-ink mt-1">{storedMetadata.description}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    {storedMetadata.website && (
+                      <div>
+                        <span className="text-xs text-muted">Website:</span>
+                        <SafeExternalLink 
+                          href={storedMetadata.website}
+                          className="block text-info hover:text-info-hover transition-colors truncate"
+                          blockedClassName="block text-muted cursor-not-allowed truncate"
+                        >
+                          {storedMetadata.website}
+                        </SafeExternalLink>
+                      </div>
+                    )}
+                    {storedMetadata.twitter && (
+                      <div>
+                        <span className="text-xs text-muted">Twitter:</span>
+                        <SafeExternalLink 
+                          href={storedMetadata.twitter}
+                          className="block text-info hover:text-info-hover transition-colors truncate"
+                          blockedClassName="block text-muted cursor-not-allowed truncate"
+                        >
+                          {storedMetadata.twitter}
+                        </SafeExternalLink>
+                      </div>
+                    )}
+                    {storedMetadata.discord && (
+                      <div>
+                        <span className="text-xs text-muted">Discord:</span>
+                        <SafeExternalLink 
+                          href={storedMetadata.discord}
+                          className="block text-info hover:text-info-hover transition-colors truncate"
+                          blockedClassName="block text-muted cursor-not-allowed truncate"
+                        >
+                          {storedMetadata.discord}
+                        </SafeExternalLink>
+                      </div>
+                    )}
+                    {storedMetadata.logoUrl && (
+                      <div>
+                        <span className="text-xs text-muted">Logo:</span>
+                        <SafeExternalLink 
+                          href={storedMetadata.logoUrl}
+                          className="block text-info hover:text-info-hover transition-colors truncate"
+                          blockedClassName="block text-muted cursor-not-allowed truncate"
+                        >
+                          View Logo
+                        </SafeExternalLink>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
