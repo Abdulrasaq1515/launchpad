@@ -8,6 +8,11 @@ export interface RecentToken extends TokenInfo {
   activityScore: number;
 }
 
+export interface FetchRecentTokensResult {
+  tokens: RecentToken[];
+  nextCursor: string | null;
+}
+
 interface RpcEvent {
   contractId?: string;
   ledger?: number;
@@ -20,8 +25,8 @@ interface RpcEvent {
 // (e.g. getHealth() unsupported or unreachable) — the previous fixed window.
 const FALLBACK_LOOKBACK_LEDGERS = 17280; // ~24 hours at ~5s per ledger
 const LOOKBACK_LEDGERS = LEDGERS_PER_DAY; // ~24 hours at ~5s per ledger
-const MAX_CANDIDATES = 20;
 const MAX_RESULTS = 12;
+// Issue #477: Removed MAX_CANDIDATES truncation to support pagination
 const FACTORY_PAGE_SIZE = 100;
 
 async function safeGetEvents(
@@ -146,17 +151,32 @@ async function resolveStartLedger(
 export async function fetchRecentTokens(
   config: NetworkConfig,
   factoryAddress?: string,
-): Promise<RecentToken[]> {
+  options: {
+    cursor?: string;
+    limit?: number;
+  } = {},
+): Promise<FetchRecentTokensResult> {
+  const { cursor, limit = MAX_RESULTS } = options;
   const rpc = new StellarSdk.rpc.Server(config.rpcUrl);
   const getEvents = (
     rpc as unknown as {
       getEvents?: (req: unknown) => Promise<unknown>;
     }
   ).getEvents;
-  if (!getEvents) return [];
+  if (!getEvents) return { tokens: [], nextCursor: null };
 
   const { sequence: latestLedger } = await rpc.getLatestLedger();
-  const startLedger = await resolveStartLedger(rpc, latestLedger);
+  // Issue #477: Use cursor if provided, otherwise start from lookback
+  let startLedger = await resolveStartLedger(rpc, latestLedger);
+  if (cursor) {
+    const cursorParts = cursor.split('-');
+    if (cursorParts.length === 2) {
+      const parsed = parseInt(cursorParts[1], 10);
+      if (!isNaN(parsed)) {
+        startLedger = parsed;
+      }
+    }
+  }
 
   const initTopic = StellarSdk.xdr.ScVal.scvSymbol("init").toXDR("base64");
   const initEvents = await safeGetEvents(getEvents, {
@@ -194,13 +214,11 @@ export async function fetchRecentTokens(
       )
     : new Map<string, RpcEvent>();
 
-  // Sort by ledger descending *before* truncating, so a window with more than
-  // MAX_CANDIDATES launches keeps the newest ones rather than whichever
-  // MAX_CANDIDATES the RPC happened to return first.
+  // Sort by ledger descending *before* truncating for activity scoring.
+  // Issue #477: Process all candidates (no MAX_CANDIDATES truncation) for pagination support
   const candidates = Array.from(filteredSeen.entries())
-    .sort(([, a], [, b]) => (b.ledger ?? 0) - (a.ledger ?? 0))
-    .slice(0, MAX_CANDIDATES);
-  if (candidates.length === 0) return [];
+    .sort(([, a], [, b]) => (b.ledger ?? 0) - (a.ledger ?? 0));
+  if (candidates.length === 0) return { tokens: [], nextCursor: null };
 
   const tokens: RecentToken[] = [];
   const settled = await Promise.allSettled(
@@ -222,7 +240,7 @@ export async function fetchRecentTokens(
     }
   }
 
-  if (tokens.length === 0) return [];
+  if (tokens.length === 0) return { tokens: [], nextCursor: null };
 
   const ids = tokens.map((t) => t.contractId);
   const scores = new Map<string, number>();
@@ -263,5 +281,18 @@ export async function fetchRecentTokens(
       b.deployedAt.localeCompare(a.deployedAt),
   );
 
-  return tokens.slice(0, MAX_RESULTS);
+  // Return only the requested limit
+  const resultTokens = tokens.slice(0, limit);
+  
+  // Issue #477: Derive nextCursor from the last event's ledger
+  // Use the corrected cursor formula from #452 (lastEvent.ledger + 1)
+  let nextCursor: string | null = null;
+  if (initEvents.length > 0 && resultTokens.length === limit) {
+    const lastEvent = initEvents[initEvents.length - 1];
+    if (lastEvent.ledger) {
+      nextCursor = `ledger-${lastEvent.ledger + 1}`;
+    }
+  }
+
+  return { tokens: resultTokens, nextCursor };
 }
