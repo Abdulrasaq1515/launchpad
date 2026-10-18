@@ -1248,8 +1248,12 @@ impl TokenContract {
     ///
     /// `total` accrues linearly from `start_ledger` to `end_ledger`, and the
     /// recipient may release accrued tokens with `claim_stream` up to
-    /// `max_per_claim` per call. The bound is what keeps a single authorised
-    /// invocation from draining the contract.
+    /// `max_per_claim` per call. The bound rate-limits how much new supply
+    /// a single authorised invocation can mint and release.
+    ///
+    /// Validates at grant time that `total` fits within the remaining supply
+    /// cap (if configured) and does not exceed the recipient's maximum balance
+    /// cap, preventing the creation of unpayable stream commitments.
     pub fn stream_grant(
         env: Env,
         recipient: Address,
@@ -1258,10 +1262,44 @@ impl TokenContract {
         end_ledger: u32,
         max_per_claim: i128,
     ) {
+        Self::_check_paused(&env);
         Self::_require_admin(&env);
         if total <= 0 || max_per_claim <= 0 || end_ledger <= start_ledger {
             panic_with_error!(&env, TokenError::InvalidStreamSchedule);
         }
+
+        if Self::_is_frozen(&env, &recipient) {
+            panic_with_error!(&env, TokenError::Frozen);
+        }
+        Self::_check_authorized(&env, &recipient);
+        Self::_check_compliance_issue(&env, &recipient);
+
+        let supply: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0);
+        let new_supply = supply
+            .checked_add(total)
+            .unwrap_or_else(|| panic_with_error!(&env, TokenError::ExceedsMaxSupply));
+
+        if let Some(cap) = env
+            .storage()
+            .instance()
+            .get::<DataKey, i128>(&DataKey::MaxSupply)
+        {
+            if new_supply > cap {
+                panic_with_error!(&env, TokenError::ExceedsMaxSupply);
+            }
+        }
+
+        let balance_key = DataKey::Balance(recipient.clone());
+        let balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
+        let new_balance = balance
+            .checked_add(total)
+            .unwrap_or_else(|| panic_with_error!(&env, TokenError::ExceedsMaxBalance));
+
+        Self::_enforce_max_balance_per_account(&env, &recipient, new_balance, supply);
 
         let stream = Stream {
             total,
@@ -1285,7 +1323,7 @@ impl TokenContract {
     /// The recipient pre-authorises a bounded claim range once, off-chain;
     /// a relayer submits the claim, and `require_auth_for_args` makes the
     /// host enforce that the signature covers exactly `(recipient,
-    /// from_ledger, to_ledger)` before the contract pays
+    /// from_ledger, to_ledger)` before the contract mints
     /// `accrued(to_ledger) - released`, capped at the schedule's
     /// `max_per_claim`.
     pub fn claim_stream(env: Env, recipient: Address, from_ledger: u32, to_ledger: u32) {
@@ -4335,6 +4373,214 @@ mod test {
         );
         env.set_auths(&[]);
         client.launch_seal(&BytesN::from_array(&env, &[1u8; 32]));
+    }
+
+    // ── Continuous vesting stream tests (#168, #534) ────────────────────
+
+    #[test]
+    fn test_stream_grant_fails_when_capped_token_has_insufficient_remaining_cap() {
+        let env = Env::default();
+        let contract_id = env.register(TokenContract, ());
+        let client = TokenContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        env.mock_all_auths();
+
+        // Standard launchpad token configuration: max_supply == initial_supply.
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "TestToken"),
+            &String::from_str(&env, "TST"),
+            &1_000_000i128,
+            &Some(1_000_000i128),
+            &false,
+            &false,
+            &None,
+            &None,
+            &0u32,
+            &admin,
+        );
+
+        // Granting a stream on a capped token where remaining cap is 0 must fail immediately.
+        assert_eq!(
+            client.try_stream_grant(&recipient, &100i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::ExceedsMaxSupply.into()))
+        );
+    }
+
+    #[test]
+    fn test_stream_grant_fails_when_total_exceeds_remaining_cap() {
+        let env = Env::default();
+        let contract_id = env.register(TokenContract, ());
+        let client = TokenContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        env.mock_all_auths();
+
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "TestToken"),
+            &String::from_str(&env, "TST"),
+            &800_000i128,
+            &Some(1_000_000i128),
+            &false,
+            &false,
+            &None,
+            &None,
+            &0u32,
+            &admin,
+        );
+
+        // Remaining cap is 200_000; total of 250_000 must fail with ExceedsMaxSupply.
+        assert_eq!(
+            client.try_stream_grant(&recipient, &250_000i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::ExceedsMaxSupply.into()))
+        );
+
+        // Grant within cap (200_000) succeeds.
+        client.stream_grant(&recipient, &200_000i128, &100u32, &200u32, &50i128);
+        assert_eq!(
+            client.stream_info(&recipient),
+            Some(Stream {
+                total: 200_000i128,
+                start_ledger: 100u32,
+                end_ledger: 200u32,
+                max_per_claim: 50i128,
+                released: 0i128,
+            })
+        );
+    }
+
+    #[test]
+    fn test_stream_grant_succeeds_and_claim_stream_mints() {
+        use soroban_sdk::testutils::Ledger as _;
+        let env = Env::default();
+        let contract_id = env.register(TokenContract, ());
+        let client = TokenContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        env.mock_all_auths();
+
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "TestToken"),
+            &String::from_str(&env, "TST"),
+            &800_000i128,
+            &Some(1_000_000i128),
+            &false,
+            &false,
+            &None,
+            &None,
+            &0u32,
+            &admin,
+        );
+
+        client.stream_grant(&recipient, &100_000i128, &100u32, &200u32, &50_000i128);
+
+        // Mid-way at ledger 150: 50% accrued = 50_000
+        env.ledger().set_sequence_number(150);
+        assert_eq!(client.stream_accrued(&recipient, &150u32), 50_000i128);
+
+        // Claiming releases and mints 50_000 to recipient
+        client.claim_stream(&recipient, &100u32, &150u32);
+        assert_eq!(client.balance(&recipient), 50_000i128);
+        assert_eq!(client.total_supply(), 850_000i128);
+
+        let stream = client.stream_info(&recipient).unwrap();
+        assert_eq!(stream.released, 50_000i128);
+    }
+
+    #[test]
+    fn test_stream_grant_fails_when_exceeding_max_balance_per_account() {
+        let (env, client, admin, user) = setup();
+
+        // 10% whale cap on total supply 10_000_000_000_000 = 1_000_000_000_000
+        client.set_max_balance_per_account(&Some(10u32));
+
+        // Transfer 900_000_000_000 to user
+        client.transfer(&admin, &user, &900_000_000_000i128);
+
+        // Granting stream of 200_000_000_000 would push user balance to 1_100_000_000_000 (> 10%)
+        assert_eq!(
+            client.try_stream_grant(&user, &200_000_000_000i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::ExceedsMaxBalance.into()))
+        );
+    }
+
+    #[test]
+    fn test_stream_grant_fails_when_recipient_frozen() {
+        let (_, client, _, user) = setup();
+        client.freeze_account(&user);
+
+        assert_eq!(
+            client.try_stream_grant(&user, &1000i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::Frozen.into()))
+        );
+    }
+
+    #[test]
+    fn test_stream_grant_fails_when_recipient_unauthorized() {
+        let env = Env::default();
+        let contract_id = env.register(TokenContract, ());
+        let client = TokenContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let user = Address::generate(&env);
+        env.mock_all_auths();
+
+        client.initialize(
+            &admin,
+            &7u32,
+            &String::from_str(&env, "TestToken"),
+            &String::from_str(&env, "TST"),
+            &1_000_000i128,
+            &None,
+            &true, // authorization_required
+            &false,
+            &None,
+            &None,
+            &0u32,
+            &admin,
+        );
+
+        assert_eq!(
+            client.try_stream_grant(&user, &1000i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::NotAuthorizedHolder.into()))
+        );
+    }
+
+    #[test]
+    fn test_stream_grant_fails_when_paused() {
+        let (_, client, _, user) = setup();
+        client.pause();
+
+        assert_eq!(
+            client.try_stream_grant(&user, &1000i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::Paused.into()))
+        );
+    }
+
+    #[test]
+    fn test_stream_grant_invalid_schedule_checks() {
+        let (_, client, _, user) = setup();
+
+        // total <= 0
+        assert_eq!(
+            client.try_stream_grant(&user, &0i128, &100u32, &200u32, &50i128),
+            Err(Ok(TokenError::InvalidStreamSchedule.into()))
+        );
+        // max_per_claim <= 0
+        assert_eq!(
+            client.try_stream_grant(&user, &1000i128, &100u32, &200u32, &0i128),
+            Err(Ok(TokenError::InvalidStreamSchedule.into()))
+        );
+        // end_ledger <= start_ledger
+        assert_eq!(
+            client.try_stream_grant(&user, &1000i128, &200u32, &100u32, &50i128),
+            Err(Ok(TokenError::InvalidStreamSchedule.into()))
+        );
     }
 
     /// Issue #497: `FeeBps` is written exactly once, inside `initialize`.
